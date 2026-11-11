@@ -14,6 +14,7 @@ import { addPhoto } from '../core/store.js';
 import { sfx } from '../core/audio.js';
 import { wait } from '../core/util.js';
 import { bus } from '../core/events.js';
+import { guideVisitor } from './directions.js';
 
 const ACT_NAMES = {
   soccer: { en: 'Soccer at Sakura Park', ja: 'さくら公園でサッカー', thanks: ['Thank you for today! Soccer was fun! ⚽', '今日はありがとう！サッカー楽しかったね！'] },
@@ -25,7 +26,16 @@ export class Activities {
   constructor(game) {
     this.game = game;
     this.search = null;
+    this._directions = null;
   }
+
+  // Detached, frozen semantic state for the debug / acceptance harness.
+  get directions() {
+    const s = this._directions;
+    return s ? Object.freeze({ ...s, availableExitTurns: Object.freeze([...s.availableExitTurns]) }) : null;
+  }
+
+  startDirections(actor, event) { return guideVisitor(this.game, actor, event); }
 
   async run(act, actors, { plan = null, like = null } = {}) {
     const game = this.game;

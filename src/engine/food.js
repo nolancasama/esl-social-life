@@ -103,6 +103,7 @@ export function itemMesh(id) {
 export function souvenirMesh(kind) {
   const b = new StaticBuilder();
   switch (kind) {
+    case 'postcard': b.box(0.3, 0.2, 0.025, '#FFF6E6', 0, 0, 0); b.box(0.08, 0.07, 0.005, '#FF8FA3', 0.085, 0.11, 0.016); b.box(0.14, 0.045, 0.005, '#80C7AB', -0.035, 0.045, 0.016); break;
     case 'soccer': b.sphere(0.12, '#FFFFFF', 0, 0.12, 0); b.sphere(0.05, '#2E3440', 0, 0.2, 0.07); break;
     case 'catch': b.sphere(0.07, '#FFFFFF', 0, 0.07, 0); b.sphere(0.1, '#B5651D', 0.12, 0.08, 0, { sx: 1.2, sz: 0.5 }); break;
     case 'cafe': b.cyl(0.06, 0.05, 0.11, '#FFFFFF', 0, 0, 0, { seg: 12 }); b.add(G.torus(0.035, 0.012, 4, 10), '#FFFFFF', { x: 0.07, y: 0.06, ry: Math.PI / 2 }); b.cyl(0.05, 0.05, 0.01, '#8B5A3C', 0, 0.1, 0, { seg: 12 }); break;

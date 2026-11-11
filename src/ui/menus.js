@@ -11,6 +11,7 @@ import { ACT_INFO } from '../game/world.js';
 import { dateOf, dayFor, dow as dowOf, isWeekend, isFreeTime } from '../world/time.js';
 import { actPhrase3 } from '../world/schedule.js';
 import { voice } from '../dialogue/voice.js';
+import { VISITORS } from '../data/content.js';
 
 const TITLES = {
   phone: ['📱 Messages', 'メッセージ'], journal: ['📖 Friendship Journal', '友達ノート'], calendar: ['📅 Calendar', 'カレンダー'],
@@ -339,10 +340,11 @@ export class Menus {
     const sv = w.save.souvenirs || [];
     if (sv.length) {
       const row = el('div', { class: 'souvenirs' });
-      const icon = { soccer: '⚽', catch: '⚾', cafe: '☕', help: '🏅' };
+      const icon = { soccer: '⚽', catch: '⚾', cafe: '☕', help: '🏅', postcard: '💌' };
       for (const s of sv) {
         const n = w.npc(s.npcId);
-        row.appendChild(el('div', { class: 'souv' }, [el('span', {}, [icon[s.kind] || '🎁']), el('small', {}, [n ? `with ${n.name}` : ''])]));
+        const visitor = VISITORS.find((v) => v.id === s.npcId);
+        row.appendChild(el('div', { class: 'souv' }, [el('span', {}, [icon[s.kind] || '🎁']), el('small', {}, [visitor ? `from ${visitor.name}` : n ? `with ${n.name}` : ''])]));
       }
       pane.appendChild(el('h4', {}, ['Souvenirs on your shelf', this.j ? el('small', {}, ['たなの思い出の品']) : null]));
       pane.appendChild(row);

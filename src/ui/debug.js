@@ -3,7 +3,8 @@
 // trigger events — without touching the save format.
 
 import { el, escapeHtml } from '../core/util.js';
-import { LOCATIONS, DAYS, LOST_ITEMS } from '../data/content.js';
+import { LOCATIONS, DAYS, LOST_ITEMS, VISITORS } from '../data/content.js';
+import { NODES } from '../world/directions.js';
 import { LEVEL_XP } from '../world/relationships.js';
 import { MORNING, AFTERNOON, EVENING } from '../world/time.js';
 
@@ -37,6 +38,7 @@ function render(game) {
   ]);
   panel.appendChild(go);
   const ev = el('div', { class: 'dbg-row' }, [
+    btn('Visitor now', () => visitorNow(game)),
     btn('❗ Lost item here', () => {
       const a = game.npcs.actors.find((x) => !x.special && w.isKnown(x.npc.id)) || game.npcs.actors.find((x) => !x.special);
       if (!a) return;
@@ -79,6 +81,24 @@ function render(game) {
   }
   panel.appendChild(list);
   panel.appendChild(el('div', { class: 'dbg-info' }, [`Draw calls: ${game.renderer.renderer.info.render.calls} · tris: ${game.renderer.renderer.info.render.triangles} · pixel ratio: ${game.renderer.ratio.toFixed(2)}`]));
+}
+
+export async function visitorNow(game) {
+  if (game.mode !== 'explore') return;
+  if (game.sceneId !== 'town') await game.enterScene('town', 'crossroads', { fade: false });
+  const w = game.world;
+  // Nearest authored street spot, with a route that includes a junction.
+  const spots = ['W', 'L', 'F', 'C', 'P', 'M', 'E', 'N', 'S'];
+  const start = spots.sort((a, b) => Math.hypot(NODES[a].x - game.player.x, NODES[a].z - game.player.z) - Math.hypot(NODES[b].x - game.player.x, NODES[b].z - game.player.z))[0];
+  const dest = start === 'L' || start === 'F' ? 'park' : 'cafe';
+  w.daily.visitor = { visitorId: VISITORS[0].id, period: w.period, dest, start, done: false };
+  w.daily.visitorDone = false;
+  // Debug deliberately allows any current period/weather.
+  const old = game.npcs.actors.find((a) => a.special === 'visitor');
+  if (old) game.npcs.removeActor(old);
+  const p = NODES[start];
+  game.npcs._spawn({ npc: VISITORS[0], special: 'visitor', adult: true }, p.x, p.z + 1.2, 0, 'stand');
+  game.save();
 }
 
 function setWeather(game, wx) {

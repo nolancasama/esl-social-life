@@ -220,6 +220,10 @@ export function matchOptions(alternatives, options) {
 // Shared phrase banks for common intents. Option builders pull from these so
 // "another recognizable suitable expression" is accepted.
 export const PHRASES = {
+  left: ['turn left', 'go left', 'left'],
+  right: ['turn right', 'go right', 'right'],
+  straight: ['go straight', 'straight', 'straight ahead'],
+  back: ['go back', 'turn back', 'turn around', 'back'],
   niceToMeet: ['nice to meet you', 'nice to meet you too', 'glad to meet you', 'nice meeting you', 'hello', 'hi', 'hi nice to meet you', 'me too'],
   greet: ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'how are you', 'hi there'],
   yes: ['yes', 'yes i do', 'yes i can', 'sure', 'ok', 'okay', 'of course', 'yes please', 'sounds good', 'sounds fun', 'good idea', 'why not', 'all right', 'yes lets'],

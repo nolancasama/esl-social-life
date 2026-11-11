@@ -15,6 +15,7 @@ import { ACT_INFO } from '../game/world.js';
 import { wait } from '../core/util.js';
 import { sfx } from '../core/audio.js';
 import { bus } from '../core/events.js';
+import { DESTINATIONS } from '../world/directions.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -65,6 +66,7 @@ function periodWord(world) { return world.weekend ? (world.period === 0 ? 'Morni
 // ---------------------------------------------------------------- entry point
 
 export async function talkToNpc(game, actor) {
+  if (actor.special === 'visitor') return visitorStart(game, actor);
   const w = game.world;
   const npc = actor.npc;
   if (actor.special === 'teacher') return talkToTeacher(game, actor);
@@ -95,6 +97,32 @@ export async function talkToNpc(game, actor) {
     await c.end();
     if (c.result?.then) await c.result.then();
   }
+}
+
+async function visitorStart(game, actor) {
+  const event = game.world.daily.visitor;
+  if (!event || event.done) return;
+  const dest = DESTINATIONS[event.dest];
+  const c = await Conversation.start(game, [actor]);
+  let help = false;
+  try {
+    await c.say(actor, line(`Excuse me. Where is ${dest.en}?`, `すみません。${dest.ja}はどこですか？`, { area: 'directions', expr: 'd.where', template: 'Where is ___?' }));
+    const r = await c.ask([
+      opt('help', 'I can help you! Follow me.', '案内するよ！ついてきて。', { keys: [['help', 'follow']], area: 'directions', expr: 'd.help', template: 'I can help you! Follow me.' }),
+      opt('decline', "Sorry, I don't know.", 'ごめんなさい、わかりません。', { keys: [['sorry', 'know']], tone: 'quiet' }),
+    ]);
+    help = r.id === 'help';
+    if (!help) {
+      event.done = true;
+      game.world.daily.visitorDone = true;
+      await c.say(actor, line("That's OK. Thank you!", 'だいじょうぶ。ありがとう！'));
+      await c.ask([opt('bye', 'Goodbye!', 'さようなら！', { phrases: PHRASES.bye, keys: [['bye']] })]);
+    }
+  } finally {
+    await c.end();
+  }
+  if (help) await game.activities.startDirections(actor, event);
+  else { game.npcs.removeActor(actor); game.save(); }
 }
 
 // ---------------------------------------------------------------- greetings & meeting

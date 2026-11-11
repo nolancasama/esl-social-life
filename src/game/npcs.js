@@ -3,7 +3,8 @@
 
 import * as THREE from 'three';
 import { Character } from '../engine/character.js';
-import { LOCATIONS, interest } from '../data/content.js';
+import { LOCATIONS, interest, VISITORS } from '../data/content.js';
+import { NODES, exitsAt, headingBetween } from '../world/directions.js';
 import { damp, angleDelta } from '../core/util.js';
 import { StaticBuilder } from '../engine/builder.js';
 import { makeBlobShadow } from '../engine/materials.js';
@@ -84,6 +85,13 @@ export class NpcManager {
     const take = (id) => { const i = present.findIndex((p) => p.n.id === id); return i >= 0 ? present.splice(i, 1)[0] : null; };
 
     // Adults
+    const visitor = w.daily.visitor;
+    if (sceneId === 'town' && visitor && !visitor.done && visitor.period === w.period && w.weather !== 'rainy') {
+      const p = NODES[visitor.start];
+      const next = exitsAt(visitor.start, null)[0].to;
+      const heading = headingBetween(visitor.start, next);
+      this._spawn({ npc: VISITORS.find((v) => v.id === visitor.visitorId), special: 'visitor', adult: true }, p.x - Math.cos(heading) * 1.2, p.z + Math.sin(heading) * 1.2, heading, 'stand');
+    }
     if (sceneId === 'classroom' && w.schoolTime) {
       const t = scene.teacherSpot;
       this._spawn({ npc: TEACHER, special: 'teacher', adult: true }, t.x, t.z, t.yaw, 'stand');
@@ -310,6 +318,14 @@ export class NpcManager {
   // ------------------------------------------------------------ queries
   actorFor(id) { return this.actors.find((a) => a.npc.id === id) || null; }
 
+  removeActor(a) {
+    a.char.root.removeFromParent();
+    a.char.dispose();
+    this.scene.collision.dynamic = this.scene.collision.dynamic.filter((c) => c !== a.collider);
+    this.actors = this.actors.filter((actor) => actor !== a);
+    this.approachQueue = this.approachQueue.filter((q) => q.actor !== a);
+  }
+
   nearby(actor, r) {
     const p = actor.char.root.position;
     return this.actors.filter((o) => o !== actor && !o.special && (o.char.root.position.x - p.x) ** 2 + (o.char.root.position.z - p.z) ** 2 < r * r);
@@ -332,6 +348,7 @@ export class NpcManager {
 
   markerFor(a) {
     const w = this.game.world;
+    if (a.special === 'visitor') return w.daily.visitor && !w.daily.visitor.done ? '❗' : '';
     if (a.special) return '';
     const id = a.npc.id;
     const lost = w.daily.lost;

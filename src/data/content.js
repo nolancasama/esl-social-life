@@ -311,3 +311,14 @@ export function thirdPerson(verbPhrase) {
   // Possessive "my" becomes "his/her/their" at the call site when needed.
   return [t, ...rest].join(' ');
 }
+// Authored adult visitors, independent of the teacher's roster.
+export const VISITORS = [
+  ['green', 'Ms. Green', 'Canada', 'カナダ', '#BFE3C0', 'bob', '#60402D', '#F9D3B2'],
+  ['lopez', 'Mr. Lopez', 'Mexico', 'メキシコ', '#FFD166', 'short', '#302620', '#C58D65'],
+  ['kim', 'Ms. Kim', 'Korea', '韓国', '#B8C8FF', 'long', '#25232B', '#EFC29C'],
+  ['silva', 'Mr. Silva', 'Brazil', 'ブラジル', '#FFB7A5', 'short', '#382A23', '#A97250'],
+].map(([id, name, country, countryJa, topColor, hairStyle, hairColor, skin]) => ({
+  id: `visitor-${id}`, name, from: `I'm from ${country}.`, fromJa: `${countryJa}から来ました。`,
+  role: 'Visitor 旅行の人', color: '#2F9E6E', voice: { pitch: 1, rate: 0.9 },
+  look: { skin, hairStyle, hairColor, top: 'collar', topColor, bottom: 'pants', bottomColor: '#44506A', shoes: '#343A40', bag: '#72543B', accessory: 'none', accColor: '#44506A', eyes: 'round', height: 1 },
+}));

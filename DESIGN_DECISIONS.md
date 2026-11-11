@@ -60,7 +60,7 @@ slice; everything below records where the build deliberately differs.
 
 ### Deferred (extension points left in place)
 - Niji Mall (building exists, "opening soon"; schedules already send NPCs there off-screen).
-- Directions activity (direction words are matched by the intent engine; the town has a street grid and walk routes).
+- Directions activity was added on 2026-11-11 (see below).
 - Group outings beyond two people (activities accept an actor array; ball play positions a third person; café seats three).
 - Friends visiting your room, special rank-up events, music.
 
@@ -70,4 +70,11 @@ slice; everything below records where the build deliberately differs.
 - Static geometry and each character limb are merged into vertex-coloured meshes with one shared toon material (≈8 draw calls per character; town ≈40 calls, classroom with a full class ≈120). Faces are shared canvas textures swapped per expression.
 - Pure logic (generator, schedules, time, relationships, intent matching) has no DOM/three imports and is unit-tested with `node --test`.
 - Conversations are async scripts (`say()` / `ask()`), which keeps branching readable and guarantees every branch ends in a choice.
+
+## 2026-11-11 — Directions favour for a visitor
+
+- Directions is a no-time-cost favour for an authored fictional adult visitor. Visitors are independent of the class roster, so helping gives phrase-book stickers and a postcard, with no classmate connection XP.
+- Left and right are relative to the visitor. The camera moves behind the visitor before showing turn choices, so screen-left matches the visitor's left.
+- Wrong turns are gentle detours, never failures. The visitor names a visible landmark and asks again; after two detours the correct arrow pulses with a Japanese hint. Tapping and optional speech use the same choices.
+- Niji Mall is a directions landmark only. Its interior remains deferred.
 - Speech matching follows esl-likes' rule: err toward acceptance; the meaningful key word (food, day, yes) decides, grammar never blocks.

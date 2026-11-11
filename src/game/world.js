@@ -8,7 +8,8 @@ import { resolveSlot, primaryPeriod, actPhrase } from '../world/schedule.js';
 import { weatherFor, dateOf, dow, isWeekend, periodLabel, clockFor, isFreeTime, MORNING, AFTERNOON, EVENING } from '../world/time.js';
 import { relOf, meet, addXp, learnFact, knowsFact, npcLink, setNpcLink, discoverLink, levelProgress } from '../world/relationships.js';
 import { logExpr, areaNeed } from '../world/progression.js';
-import { interest, DAYS, LOST_ITEMS, LOCATIONS } from '../data/content.js';
+import { interest, DAYS, LOST_ITEMS, LOCATIONS, VISITORS } from '../data/content.js';
+import { validPairs } from '../world/directions.js';
 import { isVisibleLoc } from '../world/generator.js';
 
 export const ACT_INFO = {
@@ -141,7 +142,7 @@ export class World {
   ensureDaily() {
     const d = this.save.daily;
     if (d && d.day === this.day) return d;
-    this.save.daily = { day: this.day, talked: {}, quiz: {}, approached: {}, asked: {}, lost: null, lostDone: false, wished: {} };
+    this.save.daily = { day: this.day, talked: {}, quiz: {}, approached: {}, asked: {}, lost: null, lostDone: false, visitor: null, visitorDone: false, wished: {} };
     this.rollDailyEvents();
     return this.save.daily;
   }
@@ -151,6 +152,10 @@ export class World {
   rollDailyEvents() {
     const daily = this.save.daily;
     if (this.day < 1) return;
+    const visitorRng = new RNG(`${this.cls.seed}|${this.save.id}|visitor|${this.day}`);
+    if (this.weatherOn(this.day) !== 'rainy' && visitorRng.chance(Math.min(0.85, 0.4 * this.need('directions')))) {
+      daily.visitor = { visitorId: visitorRng.pick(VISITORS).id, period: this.weekend ? visitorRng.pick([MORNING, AFTERNOON]) : AFTERNOON, ...visitorRng.pick(validPairs()), done: false };
+    }
     // A lost item in the park for one known classmate who will be there.
     const rng = new RNG(`${this.cls.seed}|${this.save.id}|lost|${this.day}`);
     const chance = Math.min(0.85, 0.4 * this.need('prepositions'));
