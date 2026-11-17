@@ -100,6 +100,33 @@ export const ABILITIES = [
   { id: 'play_kendama', en: 'play kendama', ja: 'けん玉ができます', emoji: '🎯' },
 ];
 
+// "He is good at ___." for each ability (Grade-5 introductions).
+export const GOOD_AT = {
+  run_fast: { en: 'running', ja: '走ること' },
+  kick_far: { en: 'soccer', ja: 'サッカー' },
+  catch_well: { en: 'catching', ja: 'キャッチ' },
+  throw_far: { en: 'throwing', ja: '投げること' },
+  jump_high: { en: 'jumping', ja: 'ジャンプ' },
+  swim_fast: { en: 'swimming', ja: '水泳' },
+  sing_well: { en: 'singing', ja: '歌' },
+  play_recorder: { en: 'the recorder', ja: 'リコーダー' },
+  play_piano: { en: 'the piano', ja: 'ピアノ' },
+  play_guitar: { en: 'the guitar', ja: 'ギター' },
+  dance_well: { en: 'dancing', ja: 'ダンス' },
+  draw_well: { en: 'drawing', ja: '絵' },
+  cook_curry: { en: 'cooking', ja: '料理' },
+  make_pancakes: { en: 'cooking', ja: '料理' },
+  bake_cookies: { en: 'baking', ja: 'おかし作り' },
+  climb_trees: { en: 'climbing', ja: '木のぼり' },
+  skateboard: { en: 'skateboarding', ja: 'スケボー' },
+  ski: { en: 'skiing', ja: 'スキー' },
+  ride_unicycle: { en: 'the unicycle', ja: '一輪車' },
+  jump_rope: { en: 'jump rope', ja: 'なわとび' },
+  fly_kite: { en: 'flying kites', ja: 'たこあげ' },
+  speak_english: { en: 'English', ja: '英語' },
+  play_kendama: { en: 'kendama', ja: 'けん玉' },
+};
+
 // Foods: `a` is the phrase used in "I want to eat ___." / "___, please."
 // `general` is used in "Do you like ___?".
 export const FOODS = [

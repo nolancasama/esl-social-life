@@ -52,8 +52,21 @@ export function buildHome() {
   b.sphere(0.4, '#9775FA', 1.7, 0.22, 2.4, { sy: 0.5, collide: true });
   // Window frame (north wall)
   b.box(2.3, 1.5, 0.08, '#FFFFFF', -0.9, 1.0, -3.76);
+  // TV corner (north wall, between the window and the desk): friends who visit play games here.
+  b.box(0.95, 0.36, 0.42, '#8D6E4F', 0.8, 0, -3.5, { collide: true });
+  b.box(0.88, 0.54, 0.07, '#2E3440', 0.8, 0.36, -3.55);
+  b.box(0.26, 0.05, 0.16, '#E9ECEF', 0.55, 0.36, -3.38);
+  b.box(0.26, 0.05, 0.16, '#E9ECEF', 1.05, 0.36, -3.38);
   const mesh = b.build();
   root.add(mesh);
+  const tvScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.44), new THREE.MeshBasicMaterial({ color: '#1C2541', toneMapped: false }));
+  tvScreen.position.set(0.8, 0.63, -3.51);
+  root.add(tvScreen);
+  const tv = {
+    x: 0.8, z: -3.5,
+    seats: [{ x: 0.4, z: -2.05, yaw: Math.PI }, { x: 1.25, z: -2.05, yaw: Math.PI }],
+    setColor: (hex) => tvScreen.material.color.set(hex || '#1C2541'),
+  };
 
   const pane = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.3), new THREE.MeshBasicMaterial({ map: windowView('day'), toneMapped: false }));
   pane.position.set(-0.9, 1.75, -3.7);
@@ -150,7 +163,7 @@ export function buildHome() {
 
   return {
     id: 'home', name: { en: 'My Room', ja: '自分の部屋' },
-    root, collision, spots: [], groups: [], interact, spawns, lights,
+    root, collision, spots: [], groups: [], interact, spawns, lights, tv,
     camera: { mode: 'room', yaw: 0, pitch: 0.86, dist: 8.8, center: { x: 0, z: 0.2 }, follow: 0.45, bounds: { minX: -4.0, maxX: 4.0, minZ: -3.2, maxZ: 7.5 } },
     setCalendar, setPhotos, setSouvenirs,
     ambience,

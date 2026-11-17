@@ -10,7 +10,18 @@
     "preview": "vite preview --host",
     "test": "node --test \"src/**/*.test.mjs\"",
     "playthrough": "node scripts/playthrough.mjs",
-    "scenarios": "node scripts/scenarios.mjs"
+    "scenarios": "node scripts/scenarios.mjs",
+    "e2e": "node scripts/run-e2e.mjs playthrough scenarios speech",
+    "e2e:playthrough": "node scripts/run-e2e.mjs playthrough",
+    "e2e:scenarios": "node scripts/run-e2e.mjs scenarios",
+    "e2e:speech": "node scripts/run-e2e.mjs speech",
+    "e2e:friendship": "node scripts/run-e2e.mjs friendship",
+    "e2e:hobby": "node scripts/run-e2e.mjs hobby",
+    "e2e:groups": "node scripts/run-e2e.mjs groups",
+    "e2e:visits": "node scripts/run-e2e.mjs visits",
+    "e2e:journey": "node scripts/run-e2e.mjs journey",
+    "e2e:perf": "node scripts/run-e2e.mjs perf",
+    "e2e:friendship-all": "node scripts/run-e2e.mjs friendship hobby groups visits journey"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.3.0",

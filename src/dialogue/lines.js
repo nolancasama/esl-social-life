@@ -9,6 +9,7 @@ import {
   dateText, dateJa, timeWords, timeJa, numberWord, listEn, subjectDays, LOCATIONS,
 } from '../data/content.js';
 import { actPhrase, actPhrase3 } from '../world/schedule.js';
+import { styleLine, band } from '../world/personality.js';
 
 export function P(npc) {
   if (npc.pronoun === 'he') return { s: 'he', S: 'He', o: 'him', p: 'his', P: 'His' };
@@ -23,16 +24,14 @@ const pick = (rng, arr) => arr[Math.floor((rng ? rng() : Math.random()) * arr.le
 // ---------------------------------------------------------------- greetings
 
 export function greeting(npc, playerName, { level, period, weekend, weather, rng }) {
+  // Opening lines come from the friend's behaviour style and level band
+  // (src/world/personality.js); best friends sometimes say so.
+  const lvl = Math.max(1, Math.min(5, level));
+  const r = rng || Math.random;
   const hi = period === 0 ? ['Good morning', 'おはよう'] : ['Hi', 'こんにちは'];
-  const n = playerName;
-  const bank = {
-    1: [[`${hi[0]}, ${n}.`, `${hi[1]}、${n}。`], [`Oh, hi ${n}!`, `あ、${n}、こんにちは！`]],
-    2: [[`${hi[0]}, ${n}! How are you?`, `${hi[1]}、${n}！元気？`], [`Hi, ${n}! Nice to see you!`, `やあ、${n}！会えてうれしい！`]],
-    3: [[`${n}! ${hi[0]}!`, `${n}！${hi[1]}！`], [`Hey, ${n}! What's up?`, `ねえ、${n}！どうしてる？`]],
-    4: [[`${n}! I was looking for you!`, `${n}！さがしてたんだ！`], [`Yay, it's ${n}! ${hi[0]}!`, `やった、${n}だ！${hi[1]}！`]],
-    5: [[`${n}! My best friend! ${hi[0]}!`, `${n}！親友！${hi[1]}！`], [`${hi[0]}, ${n}! I'm so happy to see you!`, `${hi[1]}、${n}！会えてすごくうれしい！`]],
-  };
-  const [en, ja] = pick(rng, bank[Math.max(1, Math.min(5, level))]);
+  let en, ja;
+  if (lvl >= 5 && r() < 0.35) [en, ja] = [`${playerName}! My best friend! ${hi[0]}!`, `${playerName}！親友！${hi[1]}！`];
+  else ({ en, ja } = styleLine(npc, `greet.${band(lvl)}`, { rng: r, name: playerName, period }));
   const extra = [];
   if (weather === 'sunny' && rng && rng() < 0.25) extra.push(["It's sunny today!", '今日は晴れだね！']);
   if (weather === 'rainy' && rng && rng() < 0.35) extra.push(["It's rainy today...", '今日は雨だね…']);
@@ -43,15 +42,11 @@ export function greeting(npc, playerName, { level, period, weekend, weather, rng
 
 // ---------------------------------------------------------------- facts (first person)
 
-const tails = {
-  cheerful: [["It's fun!", '楽しいよ！'], ['I love it!', '大好き！']],
-  calm: [["It's nice.", 'いいよね。'], ['It makes me happy.', 'しあわせな気分になるんだ。']],
-  energetic: [["It's so cool!", 'すごくかっこいいよ！'], ['I really love it!', '本当に大好き！']],
-  gentle: [['It makes me smile.', 'えがおになれるんだ。'], ["It's my favorite.", 'いちばん好きなんだ。']],
-};
 export function likeLine(npc, likeId, withTail = true, rng = null) {
   const it = interest(likeId);
-  const [t, tj] = withTail ? pick(rng, tails[npc.personality] || tails.cheerful) : ['', ''];
+  // Tails ("It's so fun!", "It makes me happy.") follow the behaviour style.
+  const tail = withTail ? styleLine(npc, 'tails', { rng: rng || Math.random }) : null;
+  const [t, tj] = tail ? [tail.en, tail.ja] : ['', ''];
   return line(`I like ${it.en}. ${t}`.trim(), `${it.ja}が好きです。${tj}`, { expr: 'a.like', area: 'selfintro', template: 'I like ___.' });
 }
 

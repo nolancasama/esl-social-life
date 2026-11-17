@@ -12,6 +12,54 @@ import { dateOf, dayFor, dow as dowOf, isWeekend, isFreeTime } from '../world/ti
 import { actPhrase3 } from '../world/schedule.js';
 import { voice } from '../dialogue/voice.js';
 import { VISITORS } from '../data/content.js';
+import { openOffer, openOffers, hobbyOptions, scheduleEvent, declineEvent, nextEventSlot } from '../world/friendship.js';
+import { planOuting } from '../dialogue/outing.js';
+import { eventTitle } from '../dialogue/events.js';
+import { whenPhrase } from '../dialogue/common.js';
+
+/**
+ * The gentle "what next?" line on a friend's journal page. Shows plans and
+ * open events first, explains a full bar that isn't levelling up, and
+ * otherwise suggests something this friend enjoys (only once you know it).
+ */
+function nextStep(w, n) {
+  const id = n.id;
+  const lvl = w.level(id);
+  const open = openOffer(w.save, id);
+  if (open?.status === 'scheduled' && open.slot) {
+    const t = eventTitle(w, open), wp = whenPhrase(w, open.slot), L = LOCATIONS[open.slot.loc] || LOCATIONS.park;
+    return { icon: t.emoji, en: `${t.en}: ${wp.en} at ${L.the}.`, ja: `${t.ja}：${wp.ja}${L.ja}で。` };
+  }
+  const del = openOffers(w.save).find((i) => i.template === 'delivery' && i.data?.accepted && i.npcId === id);
+  const target = del && w.npc(del.data.target);
+  if (target) return { icon: '🎁', en: `Give the ${del.data.present.en} to ${target.name}.`, ja: `${target.name}に${del.data.present.ja}をわたそう。` };
+  if (open) return { icon: '💬', en: `${n.name} has an idea for you. Go and talk!`, ja: `${n.name}から話があるみたい。話しかけてみよう！` };
+  const plan = w.upcomingPlans().find((p) => p.npcIds.includes(id));
+  if (plan) {
+    const a = ACT_INFO[plan.act] || { en: 'meet up', emoji: '⭐', ja: '会う' };
+    const wp = whenPhrase(w, plan);
+    return { icon: '⭐', en: `Plan: ${a.en} ${wp.en}.`, ja: `約束：${wp.ja}${a.ja}。` };
+  }
+  if (lvl < 2) return { icon: '💬', en: `Talk with ${n.name} and learn more!`, ja: `${n.name}と話して、もっと知ろう！` };
+  if (lvl >= 5) return { icon: '🌟', en: `${n.name} is your best friend!`, ja: `${n.name}は親友！` };
+  const gate = 2 + Math.min(3, (w.rel(id).memories || []).length);
+  if (lvl >= gate && w.progress(id).frac >= 1) return { icon: '📸', en: 'Do something together, just you two!', ja: 'ふたりで何かいっしょにしよう！' };
+  const h = hobbyOptions(n, 'sunny').find((o) => o.like && w.knows(id, `like:${n.likes.indexOf(o.like)}`));
+  if (h) { const it = interest(h.like); return { icon: it.emoji, en: `${n.name} wants to ${it.verb} with you.`, ja: `${n.name}は、いっしょに${it.jaWant}みたい。` }; }
+  return { icon: '💡', en: `Invite ${n.name} to do something fun!`, ja: `${n.name}をさそってみよう！` };
+}
+
+/** One line for the memory timeline: what you did, built from the stored memory. */
+function memoryCaption(m) {
+  const d = m.detail || {};
+  if (m.type === 'help') return `🔍 Found the ${d.item || 'lost thing'}`;
+  if (d.label?.en) return `${d.label.emoji || '⭐'} ${d.label.en.replace(/!$/, '')}`;
+  if (m.type === 'event' && d.recall?.en) return `⭐ ${d.recall.en}`;
+  if (m.act === 'cafe') return `☕ Café Komorebi${d.foodEn ? ` (${d.foodEn})` : ''}`;
+  if (m.act === 'soccer') return '⚽ Soccer at Sakura Park';
+  if (m.act === 'catch') return '⚾ Playing catch at the park';
+  return `${ACT_INFO[m.act]?.emoji || '⭐'} ${ACT_INFO[m.act]?.en || 'Time together'}`;
+}
 
 const TITLES = {
   phone: ['📱 Messages', 'メッセージ'], journal: ['📖 Friendship Journal', '友達ノート'], calendar: ['📅 Calendar', 'カレンダー'],
@@ -79,6 +127,10 @@ export class Menus {
   phone() {
     const w = this.game.world;
     const msgs = w.save.messages;
+    // Plan an outing with friends (group outings, Phase 2).
+    const mk = el('button', { class: 'plan-btn' }, ['📅 Make a plan with friends', this.j ? el('small', {}, ['友達と約束をする']) : null]);
+    mk.addEventListener('click', async () => { this.close(); await planOuting(this.game); this.game.hud.refresh(); });
+    this.body.appendChild(el('div', { class: 'plan-row' }, [mk]));
     if (!msgs.length) {
       this.body.appendChild(el('div', { class: 'empty' }, ['No messages yet. Make friends, and they will write to you!', this.j ? el('small', {}, ['まだメッセージはないよ。友達ができるとメッセージが来るよ！']) : null]));
       return;
@@ -96,10 +148,17 @@ export class Menus {
       if (m.kind === 'invite' && m.invite) {
         const inv = m.invite;
         const row = el('div', { class: 'msg-replies' });
-        if (inv.status === 'pending' && inv.day >= w.day) {
+        // An event invitation (a home visit) can only be answered while that event is still open.
+        const stillOpen = !inv.eventId || openOffers(w.save).some((i) => i.id === inv.eventId && i.status === 'offered');
+        if (inv.status === 'pending' && inv.day >= w.day && stillOpen) {
           const reply = (en, ja, fn, tone = '') => { const b = el('button', { class: `reply ${tone}` }, [en, this.j ? el('small', {}, [ja]) : null]); b.addEventListener('click', fn); row.appendChild(b); };
+          // Event invitations (home visits) go on the calendar through the event; group ones book everyone.
+          const book = (day, period) => (inv.eventId
+            ? scheduleEvent(w, inv.eventId, { day, period, loc: inv.loc, act: inv.act })
+            : w.addPlan({ npcIds: [n.id, ...(inv.with || [])], day, period, loc: inv.loc, act: inv.act, source: 'invite' }));
           reply("Sure! Let's go!", 'いいよ！行こう！', () => {
-            const plan = w.addPlan({ npcIds: [n.id], day: inv.day, period: inv.period, loc: inv.loc, act: inv.act, source: 'invite' });
+            const plan = book(inv.day, inv.period);
+            if (!plan) { this.game.hud.toast({ icon: '📅', en: 'You already have a plan then. Try "How about another day?"', ja: 'その時は予定があるよ。ほかの日にしよう。' }); return; }
             inv.status = 'accepted';
             w.logLine({ expr: 'a.sure', area: 'wantto', en: "Sure! Let's go!", template: "Sure! Let's go!" }, 'said');
             w.xp(n.id, 1, { key: `invite:${m.id}`, reason: 'invite' });
@@ -109,6 +168,7 @@ export class Menus {
           }, 'go');
           reply("Sorry, I can't.", 'ごめん、行けないんだ。', () => {
             inv.status = 'declined';
+            if (inv.eventId) declineEvent(w.save, inv.eventId, w.day);
             w.logLine({ expr: 'a.sorry', area: 'wantto', en: "Sorry, I can't.", template: "Sorry, I can't." }, 'said');
             w.addMessage({ from: n.id, kind: 'reply', en: "OK! Maybe next time! 😊", ja: 'オッケー！また今度ね！', read: true });
             this.game.save();
@@ -117,9 +177,9 @@ export class Menus {
           reply('How about another day?', 'ほかの日はどう？', () => {
             row.innerHTML = '';
             const opts = [];
-            let d = inv.day, p = inv.period;
+            let d = inv.day;
             for (let k = 0; k < 3; k++) {
-              const s = w.nextFreeSlot(n.id, d + 1, 0);
+              const s = nextEventSlot(w, [n.id, ...(inv.with || [])], { fromDay: d + 1, fromPeriod: 0 }) || w.nextFreeSlot(n.id, d + 1, 0);
               opts.push(s); d = s.day;
             }
             for (const s of opts) {
@@ -127,8 +187,9 @@ export class Menus {
               const label = `How about ${dd.en}?`;
               const b = el('button', { class: 'reply' }, [label, this.j ? el('small', {}, [`${dd.ja}はどう？`]) : null]);
               b.addEventListener('click', () => {
+                const plan = book(s.day, s.period);
+                if (!plan) return;
                 inv.status = 'rescheduled';
-                const plan = w.addPlan({ npcIds: [n.id], day: s.day, period: s.period, loc: inv.loc, act: inv.act, source: 'invite' });
                 w.logLine({ expr: 'a.howabout', area: 'weekly', en: label, template: 'How about (day)?' }, 'said');
                 w.addMessage({ from: n.id, kind: 'reply', en: `OK! See you on ${dd.en}! 🙌`, ja: `オッケー！${dd.ja}に会おうね！`, read: true });
                 this.game.hud.planToast(plan);
@@ -222,6 +283,8 @@ export class Menus {
     head.innerHTML = `<img src="${this.game.portrait(n)}" alt=""><div><h3>${escapeHtml(n.name)}</h3><div class="hearts big">${hearts(pr.level)}</div>
       <div class="lv">Lv ${pr.level} · ${LEVEL_NAMES[pr.level].en}${this.j ? ` <small>${LEVEL_NAMES[pr.level].ja}</small>` : ''}</div><div class="bar"><i style="width:${Math.round(pr.frac * 100)}%"></i></div></div>`;
     pane.appendChild(head);
+    const ns = nextStep(w, n);
+    pane.appendChild(el('div', { class: 'nextstep' }, [el('span', { class: 'ns-i' }, [ns.icon]), el('span', {}, [ns.en, this.j ? el('small', {}, [ns.ja]) : null])]));
     const cols = el('div', { class: 'fd-cols' });
     // Facts
     const facts = el('div', { class: 'fd-box' }, [el('h4', {}, ['What I know', this.j ? el('small', {}, ['知っていること']) : null])]);
@@ -261,13 +324,23 @@ export class Menus {
     pane.appendChild(cols);
     // Memories with this friend
     const photos = loadPhotos(w.save.id).filter((p) => (p.npcIds || []).includes(id)).slice(0, 4);
-    const mems = w.memoriesWith(id).slice(0, 4);
+    const mems = w.memoriesWith(id).slice(0, 8);
     if (photos.length || mems.length) {
       const box = el('div', { class: 'fd-box' }, [el('h4', {}, ['Memories together', this.j ? el('small', {}, ['いっしょの思い出']) : null])]);
-      const row = el('div', { class: 'photorow' });
-      for (const p of photos) row.appendChild(el('div', { class: 'polaroid sm' }, [el('img', { src: p.url, alt: '' }), el('span', {}, [p.caption])]));
-      if (!photos.length) for (const m of mems) row.appendChild(el('div', { class: 'memo' }, [m.type === 'help' ? `🔍 Found the ${m.detail.item}` : `${ACT_INFO[m.act]?.emoji || '⭐'} ${ACT_INFO[m.act]?.en || ''}`]));
-      box.appendChild(row);
+      if (photos.length) {
+        const row = el('div', { class: 'photorow' });
+        for (const p of photos) row.appendChild(el('div', { class: 'polaroid sm' }, [el('img', { src: p.url, alt: '' }), el('span', {}, [p.caption])]));
+        box.appendChild(row);
+      }
+      // A readable history, newest first: when, and what you did together.
+      const tl = el('div', { class: 'timeline' });
+      for (const m of mems) {
+        const dt = dateOf(m.day);
+        const when = `${DAYS[dowOf(m.day)].short} ${MONTHS[dt.m - 1].slice(0, 3)} ${dt.d}`;
+        const others = m.npcIds.filter((x) => x !== id).map((x) => w.npc(x)?.name).filter(Boolean);
+        tl.appendChild(el('div', { class: 'tl-row' }, [el('b', {}, [when]), el('span', {}, [memoryCaption(m) + (others.length ? ` · with ${others.join(', ')}` : '')]), m.hasPhoto ? el('i', {}, ['📷']) : null]));
+      }
+      box.appendChild(tl);
       pane.appendChild(box);
     }
   }

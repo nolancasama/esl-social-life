@@ -8,6 +8,8 @@ import { Renderer } from './engine/renderer.js';
 import * as store from './core/store.js';
 import { buildClass, chooseFirstPair } from './world/generator.js';
 import { meet } from './world/relationships.js';
+import { assignStyles } from './world/personality.js';
+import { migrateSave } from './world/migrate.js';
 import { logExpr } from './world/progression.js';
 import { DEFAULT_ROSTER } from './data/roster.js';
 import { interest, ability, dateText } from './data/content.js';
@@ -24,6 +26,8 @@ function ensureClass() {
     cls = { version: 1, seed, roster, npcs: buildClass(roster, seed), settings: {}, createdAt: Date.now() };
   }
   cls.settings = { speech: 'local', japanese: true, className: '5-1', ...(cls.settings || {}) };
+  // Classes saved before behaviour styles existed get them now (nothing else changes).
+  assignStyles(cls.npcs, cls.seed);
   store.saveClass(cls);
   return cls;
 }
@@ -44,6 +48,7 @@ function newSave(cls, { name, rosterId, look, like, can, birthday }) {
     settings: { japanese: cls.settings.japanese !== false, voice: true, readAnswers: true, sfx: true, quality: 'auto', mic: false },
     stats: { activities: 0 },
   };
+  migrateSave(save);
   if (pair.firstFriend) {
     // The player already knows one friendly classmate (a neighbour).
     meet(save, pair.firstFriend, 0);

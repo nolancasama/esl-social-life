@@ -108,6 +108,17 @@ export function souvenirMesh(kind) {
     case 'catch': b.sphere(0.07, '#FFFFFF', 0, 0.07, 0); b.sphere(0.1, '#B5651D', 0.12, 0.08, 0, { sx: 1.2, sz: 0.5 }); break;
     case 'cafe': b.cyl(0.06, 0.05, 0.11, '#FFFFFF', 0, 0, 0, { seg: 12 }); b.add(G.torus(0.035, 0.012, 4, 10), '#FFFFFF', { x: 0.07, y: 0.06, ry: Math.PI / 2 }); b.cyl(0.05, 0.05, 0.01, '#8B5A3C', 0, 0.1, 0, { seg: 12 }); break;
     case 'help': b.box(0.16, 0.2, 0.03, '#FFD166', 0, 0, 0); b.sphere(0.04, '#FF6B6B', 0, 0.12, 0.02); break;
+    // Friendship events: a party cake slice, a best-friend keepsake, a present you delivered.
+    case 'party': b.box(0.16, 0.09, 0.12, '#FFE3C2', 0, 0, 0); b.box(0.16, 0.03, 0.12, '#FF8FA3', 0, 0.09, 0); b.cyl(0.012, 0.012, 0.08, '#4DABF7', 0, 0.12, 0, { seg: 6 }); b.sphere(0.018, '#FFD166', 0, 0.215, 0); break;
+    case 'keepsake': b.sphere(0.075, '#FFD43B', 0, 0.085, 0); b.box(0.05, 0.03, 0.05, '#FF6B6B', 0, 0.15, 0); b.box(0.12, 0.015, 0.02, '#FF6B6B', 0, 0.165, 0); break;
+    case 'present': b.box(0.16, 0.13, 0.16, '#69DB7C', 0, 0, 0); b.box(0.035, 0.135, 0.165, '#FF6B6B', 0, 0, 0); b.box(0.165, 0.135, 0.035, '#FF6B6B', 0, 0, 0); break;
+    // Hobby sessions and other events.
+    case 'drawing': b.box(0.03, 0.22, 0.28, '#B07D4F', 0, 0, 0); b.box(0.035, 0.17, 0.22, '#FFFDF7', 0, 0.025, 0); b.sphere(0.04, '#4DABF7', 0.02, 0.12, 0.03); b.sphere(0.03, '#69DB7C', 0.02, 0.08, -0.05); break;
+    case 'nature': b.cyl(0.06, 0.06, 0.13, '#D0EBFF', 0, 0, 0, { seg: 10 }); b.cyl(0.065, 0.065, 0.02, '#69DB7C', 0, 0.13, 0, { seg: 10 }); b.sphere(0.025, '#E03131', 0, 0.05, 0); break;
+    case 'music': b.cyl(0.012, 0.012, 0.2, '#343A40', 0.04, 0.04, 0, { seg: 6 }); b.sphere(0.045, '#343A40', 0, 0.04, 0, { sy: 0.75 }); b.box(0.07, 0.03, 0.02, '#343A40', 0.07, 0.21, 0); break;
+    case 'medal': b.cyl(0.06, 0.06, 0.015, '#FFD43B', 0, 0.06, 0, { seg: 14, rx: Math.PI / 2 }); b.box(0.05, 0.06, 0.01, '#4DABF7', 0, 0.12, 0); break;
+    case 'card': b.box(0.02, 0.16, 0.12, '#FFC9DE', 0, 0, 0); b.sphere(0.025, '#E64980', 0.012, 0.09, 0); break;
+    case 'visit': b.box(0.03, 0.18, 0.22, '#FFFFFF', 0, 0, 0); b.box(0.035, 0.12, 0.16, '#74C0FC', 0, 0.03, 0); b.sphere(0.03, '#FFD43B', 0.015, 0.14, 0.05); break;
     default: b.sphere(0.08, '#FF8FA3', 0, 0.08, 0);
   }
   const m = b.build();

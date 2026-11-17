@@ -29,6 +29,8 @@ import { sfx, setMuted } from '../core/audio.js';
 import * as store from '../core/store.js';
 import { LOCATIONS, DAYS, MONTHS, WEATHER, TIMETABLE, SUBJECTS, timeWords, timeJa, ordinal } from '../data/content.js';
 import { MORNING, AFTERNOON, EVENING } from '../world/time.js';
+import { migrateSave } from '../world/migrate.js';
+import { recoverInterrupted, snapshot, offerEvent, completeEvent } from '../world/friendship.js';
 
 const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, home: buildHome };
 const tmpV = new THREE.Vector3();
@@ -40,7 +42,18 @@ export class Game {
     this.cls = cls;
     this.onQuit = onQuit;
     this.portraitFn = portraitFn;
+    // Every save is upgraded (idempotent) and an event cut off by a reload is
+    // returned to its previous state without rewards before the world exists.
+    migrateSave(save);
+    recoverInterrupted(save);
     this.world = new World(cls, save);
+    // Test/debug hooks (devtools only; nothing here is shown to students).
+    this.friendshipDebug = {
+      offer: (template, npcId, data = {}) => { const i = offerEvent(this.world, { template, npcId, data }); this.save(); return i.id; },
+      complete: (id, outcome = {}) => { const r = completeEvent(this.world, id, outcome); this.save(); return { already: r.already, xpGained: r.xpGained ?? 0, levelAfter: r.levelAfter ?? null }; },
+      // Make a classmate in this scene come over now (soft approach), ignoring the daily limits.
+      approach: (npcId) => { const a = this.npcs.actorFor(npcId); if (!a) return false; this.npcs.approachQueue = [{ actor: a, delay: 0.3, scripted: false }]; return true; },
+    };
     this.settings = { japanese: cls.settings?.japanese !== false, voice: true, readAnswers: true, sfx: true, quality: 'auto', mic: false, ...(save.settings || {}) };
     this.mode = 'explore';
     this.voice = voice;
@@ -99,6 +112,9 @@ export class Game {
     };
     if (now) doSave(); else this.saveTimer = setTimeout(doSave, 300);
   }
+
+  /** Read-only friendship state for tests (`window.__esl.friendship`). */
+  get friendship() { return snapshot(this.world); }
 
   portrait(npc) { return this.portraitFn(npc.look, npc.id + ':' + (npc.lookSeed || 0)); }
   playerPortrait() { return this.portraitFn(this.world.save.player.look, 'player:' + JSON.stringify(this.world.save.player.look).length + this.world.save.player.look.hairStyle + this.world.save.player.look.topColor); }

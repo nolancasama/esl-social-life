@@ -11,13 +11,13 @@ import { makeBlobShadow } from '../engine/materials.js';
 import { sfx } from '../core/audio.js';
 import { wait } from '../core/util.js';
 
-function until(game, fn) {
+export function until(game, fn) {
   return new Promise((resolve) => {
     game.activityTick = (dt) => { if (fn(dt)) { game.activityTick = null; resolve(); } };
   });
 }
 
-function makeBall(soccer) {
+export function makeBall(soccer) {
   const b = new StaticBuilder();
   if (soccer) { b.sphere(0.12, '#FFFFFF', 0, 0, 0); b.sphere(0.05, '#2E3440', 0, 0.1, 0.05); b.sphere(0.05, '#2E3440', 0.09, -0.03, 0.06); b.sphere(0.05, '#2E3440', -0.08, -0.04, -0.06); }
   else { b.sphere(0.08, '#FFFFFF', 0, 0, 0); b.add(new THREE.TorusGeometry(0.075, 0.008, 4, 16), '#E63946', { rx: 0.4 }); }
@@ -41,7 +41,10 @@ export async function playBall(game, actors, { soccer = false } = {}) {
   }
   const scene = game.scene;
   const f = scene.field;
-  const main = actors[0];
+  // With friends along, the partner rotates so everyone plays; the others wait at the side.
+  let main = actors[0];
+  const sideSpots = [f.c, scene.collision.nearestFree(f.x - 5.0, f.z, 0.3)];
+  const sideYaw = [-Math.PI / 2, Math.PI / 2];
   const P = game.player;
   const hud = game.activityHud;
   const c = new Conversation(game, actors);
@@ -62,7 +65,7 @@ export async function playBall(game, actors, { soccer = false } = {}) {
     main.char.setYaw(0);
     main.char.setBase('idle');
     main.char.setProp(null);
-    if (actors[1]) { actors[1].char.setPosition(f.c.x, f.c.z); actors[1].char.setYaw(-Math.PI / 2); }
+    actors.slice(1, 3).forEach((o, k) => { o.char.setPosition(sideSpots[k].x, sideSpots[k].z); o.char.setYaw(sideYaw[k]); o.char.setBase('idle'); o.char.setProp(null); });
     game.camera.shot(new THREE.Vector3(f.a.x + 0.4, 3.3, f.a.z + 5.4), new THREE.Vector3(f.x - 0.9, 0.5, f.z - 0.6), 5);
     game.camera.snap();
   });
@@ -224,12 +227,30 @@ export async function playBall(game, actors, { soccer = false } = {}) {
     return ok;
   };
 
+  // Which side spot each waiting friend stands on.
+  const spotOf = new Map(actors.slice(1, 3).map((o, k) => [o, k]));
   for (let i = 0; i < TURNS; i++) {
+    // Next friend's turn: they swap places with the current partner.
+    const next = actors[Math.floor(i / 2) % Math.min(actors.length, 3)];
+    if (i % 2 === 0 && next !== main && spotOf.has(next)) {
+      const k = spotOf.get(next);
+      const prev = main;
+      spotOf.delete(next);
+      spotOf.set(prev, k);
+      hud.say(next.npc, 'My turn!', '次はわたし！');
+      await Promise.all([game.npcs.walkTo(prev, sideSpots[k].x, sideSpots[k].z, 3.4), game.npcs.walkTo(next, f.b.x, f.b.z, 3.4)]);
+      prev.char.setYaw(sideYaw[k]);
+      next.char.setYaw(0);
+      main = next;
+      holdBall(main);
+    }
     const ok = i % 2 === 0 ? await receive() : await throwBall();
+    if (ok) for (const o of actors) if (o !== main) o.char.play('cheer', 1.0);
     results.push(ok);
     hud.setScore(results, TURNS);
     await wait(350);
   }
+  main = actors[0];
   hud.setHint('', '');
   hud.say(null);
   const score = results.filter(Boolean).length;
@@ -246,6 +267,7 @@ export async function playBall(game, actors, { soccer = false } = {}) {
     main.char.setPosition(f.x + 0.45, f.z + 1.0);
     main.char.setYaw(0);
     if (actors[1]) { actors[1].char.setPosition(f.x + 1.3, f.z + 0.9); actors[1].char.setYaw(-0.2); }
+    if (actors[2]) { actors[2].char.setPosition(f.x - 1.3, f.z + 0.9); actors[2].char.setYaw(0.2); }
     game.camera.shot(new THREE.Vector3(f.x + 0.1, 1.35, f.z + 4.4), new THREE.Vector3(f.x + 0.1, 0.8, f.z + 1.0), 20);
     game.camera.snap();
   });

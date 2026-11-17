@@ -75,6 +75,8 @@ export const sfx = {
   deny() { tone(220, { dur: 0.12, type: 'triangle', gain: 0.14 }); tone(180, { start: 0.08, dur: 0.14, type: 'triangle', gain: 0.12 }); },
   good() { [0, 2, 4].forEach((n, i) => tone(NOTES[n], { start: i * 0.07, dur: 0.18, type: 'triangle', gain: 0.16 })); },
   great() { [0, 2, 4, 7].forEach((n, i) => tone(NOTES[n], { start: i * 0.08, dur: 0.24, type: 'triangle', gain: 0.17 })); },
+  /** One melody note for Music Time (index into the scale). */
+  note(i = 0) { tone(NOTES[((i % NOTES.length) + NOTES.length) % NOTES.length], { dur: 0.26, type: 'triangle', gain: 0.16 }); },
   levelUp() {
     [0, 2, 4, 5, 7].forEach((n, i) => tone(NOTES[n], { start: i * 0.09, dur: 0.3, type: 'triangle', gain: 0.18 }));
     tone(NOTES[7], { start: 0.5, dur: 0.6, type: 'sine', gain: 0.12 });

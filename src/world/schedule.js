@@ -11,8 +11,15 @@ const OUTDOOR = new Set(['park', 'town']);
  * @param {object} ctx { seed, weather: (day) => string, plans: [] }
  */
 export function resolveSlot(ctx, npc, day, period) {
-  const plan = (ctx.plans || []).find((p) => p.status === 'pending' && p.day === day && p.period === period && p.npcIds.includes(npc.id));
+  const busyWithPlayer = (id) => (ctx.plans || []).find((p) => p.status === 'pending' && p.day === day && p.period === period && p.npcIds.includes(id));
+  const plan = busyWithPlayer(npc.id);
   if (plan) return { loc: plan.loc, act: plan.act, with: plan.npcIds.filter((id) => id !== npc.id), plan: plan.id };
+
+  // Classmates who became friends through play meet up on their own (social.js),
+  // unless the other one has a plan with the player then.
+  const hang = (ctx.npcPlans || []).find((p) => p.status === 'pending' && p.day === day && p.period === period && (p.a === npc.id || p.b === npc.id));
+  const partner = hang && (hang.a === npc.id ? hang.b : hang.a);
+  if (hang && !busyWithPlayer(partner)) return { loc: hang.loc, act: hang.act, with: [partner], hangout: hang.id };
 
   const base = npc.schedule[dow(day)][period];
   let slot = { loc: base.loc, act: base.act, with: [...(base.with || [])] };

@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "id": "p-fixture1",
+  "createdAt": 1762800000000,
+  "updatedAt": 1763500000000,
+  "player": {
+    "name": "Rio",
+    "look": { "skin": "#F9D3B2", "hairStyle": "short", "hairColor": "#1F1C24", "top": "tshirt", "topColor": "#4DABF7", "bottom": "shorts", "bottomColor": "#2B3A55", "shoes": "#FFFFFF", "bag": "#C92A2A", "accessory": "none", "accColor": "#FF6B6B", "eyes": "round", "height": 1 },
+    "likes": ["soccer", "drawing"],
+    "intro": { "like": "soccer", "can": "swim_fast" },
+    "birthday": { "m": 5, "d": 10 }
+  },
+  "excluded": [],
+  "time": { "day": 9, "period": 1 },
+  "rel": {
+    "ken": { "level": 5, "xp": 81, "metDay": -1, "facts": { "like:0": 0, "like:1": 1, "can:0": 1, "week:5": 2, "birthday": 4 }, "awarded": { "chat:0": 0, "fact:like:0": 0, "act:catch": 1, "act:cafe": 3, "act:soccer": 5, "quiz:6": 6 }, "memories": ["mem-c", "mem-b", "mem-a"], "lastTalkDay": 8, "introducedBy": null, "factDay": 4, "factXpToday": 2, "lastInvite": 6 },
+    "yuki": { "level": 4, "xp": 52, "metDay": 0, "facts": { "like:0": 0, "can:0": 0, "week:5": 0 }, "awarded": { "fact:like:0": 0, "fact:can:0": 0, "act:soccer": 0, "act:catch": 6, "invite-remember:soccer": 2 }, "memories": ["mem-e", "mem-d"], "lastTalkDay": 8, "introducedBy": "ken", "factDay": 0, "factXpToday": 6 },
+    "haru": { "level": 3, "xp": 31, "metDay": 2, "facts": { "like:0": 2, "can:0": 3 }, "awarded": { "fact:like:0": 2, "help:7": 7 }, "memories": ["mem-f"], "lastTalkDay": 7, "introducedBy": "ken", "factDay": 3, "factXpToday": 2 },
+    "mei": { "level": 2, "xp": 12, "metDay": 3, "facts": { "like:0": 3, "food": 3, "pet": 5 }, "awarded": { "fact:like:0": 3, "fact:food": 3, "fact:pet": 5 }, "memories": [], "lastTalkDay": 5, "introducedBy": null, "factDay": 5, "factXpToday": 2 },
+    "sota": { "level": 1, "xp": 0, "metDay": 8, "facts": {}, "awarded": {}, "memories": [], "lastTalkDay": 8, "introducedBy": null }
+  },
+  "npcLinks": { "haru|yuki": 1 },
+  "discoveredLinks": ["ken|yuki", "haru|ken"],
+  "plans": [
+    { "id": "plan-a1", "npcIds": ["yuki"], "day": 0, "period": 1, "loc": "park", "act": "soccer", "status": "done", "source": "talk", "made": 0 },
+    { "id": "plan-a2", "npcIds": ["mei"], "day": 4, "period": 1, "loc": "cafe", "act": "cafe", "status": "missed", "source": "talk", "made": 4 },
+    { "id": "plan-a3", "npcIds": ["yuki"], "day": 10, "period": 1, "loc": "park", "act": "soccer", "status": "pending", "source": "message", "made": 9 }
+  ],
+  "messages": [
+    { "id": "msg-a1", "day": 8, "read": false, "from": "ken", "kind": "invite", "en": "Let's play catch on Saturday! Do you want to come?", "ja": "土曜日にキャッチボールをするのはどう？いっしょに来る？", "invite": { "act": "catch", "loc": "park", "day": 12, "period": 0, "status": "pending" } },
+    { "id": "msg-a2", "day": 7, "read": true, "from": "haru", "kind": "thanks", "en": "Thank you for finding my book! You're my hero! 🦸", "ja": "本を見つけてくれてありがとう！" }
+  ],
+  "memories": [
+    { "id": "mem-f", "day": 7, "period": 1, "npcIds": ["haru"], "type": "help", "act": null, "detail": { "item": "book", "itemJa": "本", "prep": "under", "obj": "bench" }, "phrase": null, "hasPhoto": false },
+    { "id": "mem-e", "day": 6, "period": 1, "npcIds": ["yuki"], "type": "activity", "act": "catch", "detail": { "score": 5, "turns": 6 }, "phrase": "Can you catch? — Yes, I can!", "hasPhoto": true },
+    { "id": "mem-c", "day": 5, "period": 0, "npcIds": ["ken"], "type": "activity", "act": "soccer", "detail": { "score": 4, "turns": 6 }, "phrase": "Do you want to play soccer?", "hasPhoto": true },
+    { "id": "mem-b", "day": 3, "period": 1, "npcIds": ["ken"], "type": "activity", "act": "cafe", "detail": { "foodEn": "hamburger", "foodId": "hamburger", "npcFood": "pizza", "drink": "orange" }, "phrase": "I want to eat a hamburger. — A hamburger, please.", "hasPhoto": true },
+    { "id": "mem-a", "day": 1, "period": 1, "npcIds": ["ken"], "type": "activity", "act": "catch", "detail": { "score": 3, "turns": 6 }, "phrase": "Can you catch? — Yes, I can!", "hasPhoto": false },
+    { "id": "mem-d", "day": 0, "period": 1, "npcIds": ["yuki"], "type": "activity", "act": "soccer", "detail": { "score": 4, "turns": 6 }, "phrase": "Do you want to play soccer?", "hasPhoto": true }
+  ],
+  "souvenirs": [
+    { "kind": "soccer", "npcId": "yuki", "day": 0 },
+    { "kind": "catch", "npcId": "ken", "day": 1 },
+    { "kind": "cafe", "npcId": "ken", "day": 3 },
+    { "kind": "help", "npcId": "haru", "day": 7 }
+  ],
+  "lang": {
+    "expr": { "a.myname": { "area": "selfintro", "template": "My name is ___.", "ja": "", "example": "My name is Rio.", "heard": 0, "said": 3, "spoken": 0, "firstDay": 0, "lastDay": 3 } },
+    "areas": { "selfintro": { "heard": 4, "said": 9, "spoken": 0 }, "weekly": { "heard": 3, "said": 2, "spoken": 0 }, "food": { "heard": 2, "said": 3, "spoken": 0 } }
+  },
+  "daily": { "day": 9, "talked": { "ken": 1 }, "quiz": {}, "approached": {}, "asked": {}, "lost": null, "lostDone": false, "visitor": null, "visitorDone": false, "wished": {} },
+  "flags": { "fd": "done" },
+  "firstFriend": "ken",
+  "introNpc": "yuki",
+  "heard": [],
+  "weatherOverrides": {},
+  "eveningQueue": [],
+  "settings": { "japanese": true, "voice": true, "readAnswers": true, "sfx": true, "quality": "auto", "mic": false },
+  "stats": { "activities": 5 }
+}

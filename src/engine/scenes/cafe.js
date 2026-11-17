@@ -54,6 +54,8 @@ export function buildCafe() {
       { dx: 0.95, dz: 0, yaw: -Math.PI / 2 },
       { dx: 0, dz: 0.95, yaw: Math.PI },
     ];
+    // The outing table seats a group of four (the player and three friends).
+    if (t.id === 'T2') chairs.push({ dx: 0, dz: -0.95, yaw: 0 });
     chairs.forEach((c, i) => {
       const x = t.x + c.dx, z = t.z + c.dz;
       b.cyl(0.21, 0.21, 0.06, '#C0392B', x, 0.42, z, { seg: 12 });

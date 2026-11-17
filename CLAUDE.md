@@ -12,6 +12,10 @@ is `SPEC.md` (section numbers are cited in decisions).
 - `node scripts/speech.mjs` — speech input with a mocked recognizer
 - `node scripts/shots.mjs <scene>[?query]` — dev scene viewer screenshots (`/?view=town&lineup=1`)
   Set `SHOTS_DIR` to keep screenshots out of the repo.
+- `npm run e2e` — playthrough + scenarios + speech with a dev server the runner starts and stops
+  (`scripts/run-e2e.mjs`; no separate `npm run dev` needed). `npm run e2e:friendship-all` runs
+  friendship, hobby, groups, visits and journey; each also has its own `e2e:<name>`; `e2e:perf`
+  reports draw calls per scene.
 
 ## Map
 - `src/world/` pure logic: `generator.js` (roster → fictional NPCs, links, schedules),
@@ -23,6 +27,12 @@ is `SPEC.md` (section numbers are cited in decisions).
   `runner.js` (say/ask), `ui.js` (dialogue box + cards + mic), `intent.js` (speech matching),
   `speech.js`, `voice.js`.
 - `src/activities/` `ballplay.js` (catch/soccer), `cafe.js`, `index.js` (rewards, lost-item search, counter).
+- Friendship depth (DESIGN_DECISIONS 2026-11-16): `world/personality.js` (behaviour styles),
+  `data/events.js` (templates), `world/friendship.js` (event lifecycle, availability, memory refs),
+  `world/social.js` (NPC–NPC hangouts), `world/migrate.js` (save v2), `dialogue/events.js` (flow
+  registry + flows), `dialogue/outing.js` (phone plan composer), `dialogue/common.js`,
+  `activities/hobby.js` · `milestone.js` · `visit.js`. Test hooks: `window.__esl.friendship`
+  (frozen snapshot), `window.__esl.friendshipDebug` (offer / complete / approach).
 - `src/engine/` three.js: `builder.js` (merged vertex-colour geometry), `character.js`,
   `camera.js`, `collision.js`, `renderer.js`, `scenes/*`.
 - `src/ui/` HUD, menus, screens (title/teacher/creator), overlay, debug, CSS.
@@ -31,5 +41,8 @@ is `SPEC.md` (section numbers are cited in decisions).
 - Every NPC trait is generated; never derive anything from a real name. Pronouns only from the teacher's roster line.
 - Conversations must always end in a choice; never a dead end. New lines need `ja` hints written for Grade 5 readers.
 - Connection never decreases. Fact XP is capped per day; Lv3+ needs shared memories (see relationships.js).
+  Only one-on-one memories (`focus`) open levels; group outings use `focus: []`.
+- Behaviour styles are never shown as labels and never read by XP code. Event XP goes through
+  `completeEvent` (once per instance). New templates need a registered flow in `dialogue/events.js`.
 - Speech failures (no speech, timeout, mic off, denied) are never penalised and never force a mode.
 - Judge visual changes from screenshots, not from the code.

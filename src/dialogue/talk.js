@@ -16,6 +16,11 @@ import { wait } from '../core/util.js';
 import { sfx } from '../core/audio.js';
 import { bus } from '../core/events.js';
 import { DESTINATIONS } from '../world/directions.js';
+import { actVerb, jaLets, jaWant, jaInvite, confirmTime } from './common.js';
+import { friendshipMoment, deliveryHandoff, plannedEventFlow, playerIntro, sline, inviteHome } from './events.js';
+import { memoryRefs, markReferenced, canOffer, offerEvent, completeEvent, openOffer, eligibleEvents, recordPlayerAnswer, playerAnswer } from '../world/friendship.js';
+import { styleGesture } from '../world/personality.js';
+import { FOODS, petPhrase, listEn } from '../data/content.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -49,20 +54,6 @@ function playableActFor(world, npc) {
   return { act: 'catch', like: null, known: false };
 }
 
-function actVerb(act, like) {
-  if (act === 'soccer') return { en: 'play soccer', ja: 'サッカーをする', emoji: '⚽' };
-  if (act === 'cafe') return { en: 'go to the café', ja: 'カフェに行く', emoji: '☕' };
-  if (like === 'baseball') return { en: 'play catch', ja: 'キャッチボールをする', emoji: '⚾' };
-  if (like === 'basketball') return { en: 'play catch', ja: 'キャッチボールをする', emoji: '🏀' };
-  return { en: 'play catch', ja: 'キャッチボールをする', emoji: '⚾' };
-}
-
-const jaLets = (ja) => ja.replace(/する$/, 'しよう').replace(/行く$/, '行こう');
-const jaWant = (ja) => ja.replace(/する$/, 'したい').replace(/行く$/, '行きたい');
-const jaInvite = (ja) => ja.replace(/する$/, 'しない？').replace(/行く$/, '行かない？');
-
-function periodWord(world) { return world.weekend ? (world.period === 0 ? 'Morning' : 'Afternoon') : 'After School'; }
-
 // ---------------------------------------------------------------- entry point
 
 export async function talkToNpc(game, actor) {
@@ -81,6 +72,8 @@ export async function talkToNpc(game, actor) {
       await greet(c, actor);
     }
     if (c.ended) return;
+    // A present someone asked you to bring to this classmate.
+    await deliveryHandoff(c, actor);
     const plan = w.planWith(npc.id);
     if (plan && game.locationId === plan.loc) { await planFlow(c, actor, plan); if (c.result) return; }
     const lost = w.daily.lost;
@@ -89,6 +82,10 @@ export async function talkToNpc(game, actor) {
       return;
     }
     if (await birthdayCheck(c, actor)) { /* continue */ }
+    // Friendship events: an open offer, or maybe something new (src/dialogue/events.js).
+    await friendshipMoment(c, actor);
+    actor.approached = false;
+    if (c.ended || c.result) return;
     if (w.level(npc.id) >= 2 && !w.daily.quiz[npc.id] && Math.random() < 0.3) await memoryQuiz(c, actor);
     if (w.isKnown(npc.id) && (w.level(npc.id) >= 2 || w.save.flags.fd === 'done')) await maybeIntroduceFriend(c, actor);
     if (c.ended || c.result) return;
@@ -137,11 +134,17 @@ async function greet(c, actor) {
     await c.say(actor, pick(rng, [line(`Hi again, ${c.playerName}!`, `また会ったね、${c.playerName}！`), line(`Oh, ${c.playerName}! What's up?`, `あ、${c.playerName}！どうしたの？`)]));
     return;
   }
-  await c.say(actor, greeting(npc, c.playerName, { level: w.level(npc.id), period: w.period, weekend: w.weekend, weather: w.weather, rng }), { gesture: 'wave', expr: 'happy' });
-  // Shared memory callback: the NPC remembers what you did together.
+  await c.say(actor, greeting(npc, c.playerName, { level: w.level(npc.id), period: w.period, weekend: w.weekend, weather: w.weather, rng }), { gesture: styleGesture(npc, 'greet'), expr: 'happy' });
+  // Best friends sometimes say something personal (what you told them).
+  if (w.level(npc.id) >= 5) await personalLine(c, actor);
+  // Shared memory callback. The first-day morning keeps the brief's exact
+  // script; every other callback comes from stored memories (rememberMoment).
+  const firstDayCallback = w.save.flags.fd === 'slept' && npc.id === w.save.introNpc;
+  if (!firstDayCallback) { await rememberMoment(c, actor); return; }
   const mem = w.lastMemoryWith(npc.id, 3);
   if (mem && !w.daily.asked[`mem:${npc.id}`]) {
     w.daily.asked[`mem:${npc.id}`] = true;
+    markReferenced(w.save, mem.id, w.day);
     const when = w.day - mem.day === 1 ? 'yesterday' : `on ${DAYS[(mem.day % 7 + 7) % 7].en}`;
     const whenJa = w.day - mem.day === 1 ? 'きのう' : `${DAYS[(mem.day % 7 + 7) % 7].ja}`;
     let l;
@@ -160,6 +163,126 @@ async function greet(c, actor) {
       bus.emit('firstday', { stage: 'done' });
     }
   }
+}
+
+/**
+ * The friend recalls a real stored memory. As a "remember" event (Lv2+, one a
+ * day) it becomes a choice: do it again, do something different, or next
+ * time — which turns into a plan. Otherwise a light thank-you for yesterday.
+ */
+async function rememberMoment(c, actor) {
+  const w = c.world, npc = actor.npc;
+  const k = `mem:${npc.id}`;
+  if (w.daily.asked[k]) return;
+  const ref = memoryRefs(w, npc.id, { limit: 1 })[0];
+  if (!ref) return;
+  const again = ref.again && ACT_INFO[ref.again.act] ? ref.again.act : null;
+  const asEvent = w.level(npc.id) >= 2 && canOffer(w.save, w.day, 'remember') && !openOffer(w.save, npc.id)
+    && eligibleEvents(w, npc.id, { available: new Set(['remember']) }).eligible.includes('remember');
+  if (!asEvent && ref.diff !== 1) return;
+  w.daily.asked[k] = true;
+  markReferenced(w.save, ref.memoryId, w.day);
+  await c.say(actor, line(ref.en, ref.ja, { area: 'verbs' }), { expr: 'happy', gesture: styleGesture(npc, 'happy') });
+  if (!asEvent) {
+    await c.ask([
+      opt('fun', 'Yes! It was fun!', 'うん！楽しかった！', { emoji: '😄', phrases: ['yes it was fun', 'it was fun', 'yes', 'fun'], keys: [['fun', 'yes']] }),
+      opt('thanks', 'Thank you, too!', 'こちらこそ、ありがとう！', { emoji: '😊', phrases: ['thank you too', 'thank you', 'thanks'], keys: [['thank']] }),
+    ]);
+    w.xp(npc.id, 1, { key: `remember:${ref.memoryId}`, reason: 'memory' });
+    return;
+  }
+  const inst = offerEvent(w, { template: 'remember', npcId: npc.id, data: { memoryId: ref.memoryId } });
+  const v = again ? actVerb(again, null) : null;
+  await c.say(actor, v
+    ? line(`Do you want to ${v.en} again?`, `また${jaInvite(v.ja)}`, { area: 'wantto', expr: 'q.wantto', template: 'Do you want to ___?' })
+    : line('Do you want to do something together again?', 'また何かいっしょにしない？', { area: 'wantto', expr: 'q.wantto' }));
+  const opts = [];
+  if (v) opts.push(opt('again', `Yes! Let's ${v.en} again!`, `うん！また${jaLets(v.ja)}！`, { emoji: v.emoji, phrases: [`lets ${v.en} again`, 'again', 'yes'], keys: YES_KEYS, area: 'wantto', expr: 'a.lets', template: "Let's ___!" }));
+  opts.push(opt('different', "Let's do something different!", '何かちがうことをしよう！', { emoji: '💡', phrases: ["let's do something different", 'something different', 'different'], keys: [['different', 'something']], area: 'wantto' }));
+  opts.push(opt('later', 'Maybe next time.', 'また今度ね。', { emoji: '🙂', phrases: ['maybe next time', 'next time', 'no'], keys: NO_KEYS, tone: 'quiet' }));
+  const r = await c.ask(opts);
+  completeEvent(w, inst.id, {});
+  if (r.id === 'later') { await c.say(actor, sline(c, npc, 'declineOk'), { expr: 'happy' }); return; }
+  if (r.id === 'again') { await startOrPlan(c, actor, again, null); return; }
+  await c.say(actor, line('OK! What do you want to do?', 'いいよ！何をしたい？', { area: 'wantto', expr: 'q.wantdo', template: 'What do you want to do?' }));
+  let choices = ['soccer', 'catch', 'cafe'].filter((a) => a !== again && !(ACT_INFO[a].outdoor && w.weather === 'rainy'));
+  if (!choices.length) choices = ['cafe'];
+  const pick = await c.ask(choices.map((a) => {
+    const vv = actVerb(a, null);
+    return opt(a, `I want to ${vv.en}.`, `${jaWant(vv.ja)}。`, { emoji: vv.emoji, phrases: [`i want to ${vv.en}`, vv.en], keys: [[a === 'cafe' ? 'cafe' : vv.en.split(' ').pop()]], area: 'wantto', expr: 'a.wantto', template: 'I want to ___.' });
+  }));
+  await c.say(actor, sline(c, npc, 'inviteYes'), { gesture: styleGesture(npc, 'happy'), expr: 'happy' });
+  await startOrPlan(c, actor, pick.id, null);
+}
+
+/** Best friends: a personal line built from what the player said about themselves. */
+async function personalLine(c, actor) {
+  const w = c.world, npc = actor.npc;
+  const k = `personal:${npc.id}`;
+  if (w.daily.asked[k] || Math.random() > 0.5) return;
+  w.daily.asked[k] = true;
+  const sat = interest(playerAnswer(w.save, 'week:5') || '');
+  const likes = (w.save.player.likes || []).map((id) => interest(id)).filter(Boolean);
+  let l = null;
+  if (sat && w.dow === 5) l = line(`It's Saturday! You ${sat.verb} on Saturdays, right?`, `今日は土曜日！いつも${sat.ja}をするんだよね？`, { area: 'weekly' });
+  else if (likes.length) {
+    const it = likes[Math.floor(Math.random() * likes.length)];
+    l = npc.likes.includes(it.id)
+      ? line(`We both like ${it.en}! 😊`, `わたしたち、二人とも${it.ja}が好きだね！`, { area: 'selfintro' })
+      : line(`You like ${it.en}, right? I want to try it, too!`, `${it.ja}が好きなんだよね？わたしもやってみたいな！`, { area: 'selfintro' });
+  }
+  if (l) await c.say(actor, l, { expr: 'happy' });
+}
+
+// Questions friends ask the player (answers are kept in save.player.answers).
+const NPC_QUESTIONS = ['week:5', 'food', 'week:6', 'pet'];
+
+async function npcAsks(c, actor) {
+  const w = c.world, npc = actor.npc;
+  const r = w.rel(npc.id);
+  if (!r.asked) r.asked = {};
+  const q = NPC_QUESTIONS.find((k) => r.asked[k] === undefined);
+  if (!q) return;
+  r.asked[q] = w.day;
+  const name = c.playerName;
+  if (q.startsWith('week:')) {
+    const d = Number(q.slice(5));
+    const D = DAYS[d];
+    await c.say(actor, line(`${name}, what do you do on ${D.plural}?`, `${name}は${D.ja}に何をするの？`, { expr: 'q.weekly', area: 'weekly', template: 'What do you do on ___s?' }));
+    const mine = (w.save.player.likes || []).filter((id) => interest(id));
+    const ids = [...new Set([...mine, ...PLAYER_LIKES.filter((x) => !mine.includes(x)).sort(() => Math.random() - 0.5)])].slice(0, 3);
+    const a = await c.ask(ids.map((id) => {
+      const it = interest(id);
+      return opt(id, `I ${it.verb} on ${D.plural}.`, `${D.ja}は${it.jaDo}。`, { emoji: it.emoji, keys: [[it.en.replace(/^the /, '').split(' ').pop()]], phrases: [`i ${it.verb} on ${D.plural}`, it.verb], area: 'weekly', expr: 'a.weekly', template: 'I ___ on ___s.' });
+    }));
+    recordPlayerAnswer(w.save, q, a.id, w.day);
+    const theirs = npc.schedule[d][w.primaryPeriodFor(npc, d)];
+    if (theirs.act === a.id) {
+      await c.say(actor, line(`Me too! I ${interest(a.id).verb} on ${D.plural}, too!`, `わたしも！${D.ja}は${interest(a.id).jaDo}！`, { area: 'weekly' }), { gesture: 'happy', expr: 'happy' });
+      w.learn(npc.id, q);
+    } else {
+      await c.say(actor, line('That sounds fun!', '楽しそう！'), { expr: 'happy' });
+    }
+    return;
+  }
+  if (q === 'food') {
+    await c.say(actor, line(`What food do you like, ${name}?`, `${name}は何の食べ物が好き？`, { expr: 'q.food', area: 'food', template: 'What food do you like?' }));
+    const foods = FOODS.slice().sort(() => Math.random() - 0.5).slice(0, 3);
+    const a = await c.ask(foods.map((f) => opt(f.id, `I like ${f.general}.`, `${f.ja}が好き。`, { emoji: f.emoji, keys: [[f.en.split(' ').pop()]], phrases: [`i like ${f.general}`, f.en], area: 'food', expr: 'a.like', template: 'I like ___.' })));
+    recordPlayerAnswer(w.save, q, a.id, w.day);
+    if (npc.food === a.id) { await c.say(actor, line(`Me too! I like ${food(a.id).general}, too!`, `わたしも${food(a.id).ja}が好き！`, { area: 'food' }), { gesture: 'happy', expr: 'happy' }); w.learn(npc.id, 'food'); }
+    else await c.say(actor, line('Yummy! 😋', 'おいしそう！'), { expr: 'happy' });
+    return;
+  }
+  await c.say(actor, line(`Do you have a pet, ${name}?`, `${name}はペットをかってる？`, { expr: 'q.pet', area: 'possessions', template: 'Do you have a ___?' }));
+  const pets = PETS.slice().sort(() => Math.random() - 0.5).slice(0, 2);
+  const a = await c.ask([
+    ...pets.map((p) => opt(p.id, `Yes, I have ${p.a}.`, `うん、${p.ja}をかってるよ。`, { emoji: p.emoji, keys: [[p.plural, p.id]], phrases: [`yes i have ${p.a}`, p.id], area: 'possessions', expr: 'a.have', template: 'I have ___.' })),
+    opt('none', "No, I don't.", 'ううん、かっていないよ。', { emoji: '🙅', phrases: ["no i don't", 'no'], keys: NO_KEYS, area: 'possessions', expr: 'a.no' }),
+  ]);
+  recordPlayerAnswer(w.save, q, a.id, w.day);
+  if (npc.pet) { await c.say(actor, line(`I have ${petPhrase(npc.pet)}! ${PETS.find((p) => p.id === npc.pet.type)?.emoji || ''}`, `わたしは${PETS.find((p) => p.id === npc.pet.type)?.ja || ''}をかってるよ！`, { area: 'possessions' }), { expr: 'happy' }); w.learn(npc.id, 'pet'); }
+  else await c.say(actor, line('I want a pet, too!', 'わたしもペットがほしいな！', { area: 'wantto' }), { expr: 'happy' });
 }
 
 async function meetStranger(c, actor) {
@@ -276,6 +399,11 @@ function topicList(c, actor, guide) {
     add({ id: 'invite', area: 'wantto', base: pa.known ? 4.2 : 2.2, card: opt('t-invite', `Do you want to ${v.en}?`, jaInvite(v.ja), { emoji: v.emoji, phrases: [`do you want to ${v.en}`, `want to ${v.en}`, `lets ${v.en}`], keys: [[pa.act === 'cafe' ? 'cafe' : v.en.split(' ').slice(-1)[0]]], expr: 'q.wantto', area: 'wantto', template: 'Do you want to ___?' }), run: (cc, a) => topicInvite(cc, a, pa.act, pa.like) });
     if (free) add({ id: 'wantdo', area: 'wantto', base: 2.6, card: opt('t-wantdo', 'What do you want to do?', '何をしたい？', { emoji: '💭', phrases: ['what do you want to do'], keys: [['want']], expr: 'q.wantdo', area: 'wantto', template: 'What do you want to do?' }), run: topicWantDo });
   }
+  // Close friends can be invited home (home_visit).
+  if (lvl >= 4 && !c.done.has('visit') && !openOffer(w.save, npc.id) && canOffer(w.save, w.day, 'home_visit')
+    && eligibleEvents(w, npc.id, { available: new Set(['home_visit']) }).eligible.includes('home_visit')) {
+    add({ id: 'visit', area: 'wantto', base: 2.8, card: opt('t-visit', 'Do you want to come to my house?', 'うちに遊びに来ない？', { emoji: '🏠', phrases: ['do you want to come to my house', 'come to my house'], keys: [['house', 'home']], expr: 'q.comehouse', area: 'wantto', template: 'Do you want to come to my house?' }), run: (cc, a) => inviteHome(cc, a) });
+  }
   // Introduce someone nearby that this NPC doesn't know.
   const intro = c.game.npcs.nearby(actor, 9).find((o) => w.isKnown(o.npc.id) && !o.busy && w.link(npc.id, o.npc.id) === 0 && [0, 1, 2].some((i) => w.knows(o.npc.id, `like:${i}`)));
   if (intro) add({ id: 'introduce', area: 'intro', base: 6, card: opt('t-intro', `This is ${intro.npc.name}.`, `こちらは${intro.npc.name}です。`, { emoji: '🤝', phrases: [`this is ${intro.npc.name}`], keys: [[intro.npc.name.toLowerCase()]], expr: 'i.thisis', area: 'intro', template: 'This is ___.' }), run: (cc, a) => topicIntroduce(cc, a, intro) });
@@ -292,6 +420,11 @@ async function topicLoop(c, actor, { guide = [] } = {}) {
   const w = c.world;
   c.guide = guide;
   for (let round = 0; round < 5 && !c.ended && !c.result; round++) {
+    // Friends sometimes ask about you, too (never during the guided first day).
+    if (round === 1 && !guide.length && !c.npcAsked && w.level(actor.npc.id) >= 2 && Math.random() < 0.45) {
+      c.npcAsked = true;
+      await npcAsks(c, actor);
+    }
     const topics = topicList(c, actor, guide).filter((t) => t.score > -10).slice(0, 3);
     const bye = opt('bye', 'Bye! See you!', 'バイバイ！またね！', { emoji: '👋', phrases: PHRASES.bye, keys: [['bye', 'see you', 'goodbye']], tone: 'quiet', area: 'selfintro', expr: 'a.bye', template: 'See you!' });
     const choice = await c.ask([...topics.map((t) => t.card), bye], { columns: 2 });
@@ -552,33 +685,51 @@ async function startOrPlan(c, actor, act, like) {
     return;
   }
   if (!w.free) { await c.say(actor, line("It's late. Let's play tomorrow!", 'もうおそいから、あした遊ぼう！')); return; }
-  // Go now: confirm the time cost first.
+  // Go now: maybe bring a friend who is nearby, then confirm the time cost first.
   const v = actVerb(act, like);
-  const ok = await confirmTime(c, `${v.emoji} ${v.en.charAt(0).toUpperCase() + v.en.slice(1)} with ${npc.name}?`, `${npc.name}と${v.ja}？`);
+  const group = await inviteNearby(c, actor);
+  const names = [npc.name, ...group.map((o) => o.npc.name)];
+  const ok = await confirmTime(c, `${v.emoji} ${v.en.charAt(0).toUpperCase() + v.en.slice(1)} with ${listEn(names)}?`, `${names.join('と')}と${v.ja}？`);
   if (!ok) { await c.say(actor, line('OK! Maybe later!', 'オッケー！またあとでね！')); return; }
-  const plan = w.addPlan({ npcIds: [npc.id], day: w.day, period: w.period, loc: info.loc, act, source: 'now' });
-  c.result = { then: () => c.game.activities.run(act, [actor], { plan, like }) };
+  const plan = w.addPlan({ npcIds: names.length > 1 ? [npc.id, ...group.map((o) => o.npc.id)] : [npc.id], day: w.day, period: w.period, loc: info.loc, act, source: 'now' });
+  c.result = { then: () => c.game.activities.run(act, [actor, ...group], { plan, like }) };
 }
 
-async function confirmTime(c, en, ja) {
+/** "Let's invite Hana, too!" — a friend nearby can come along (a group outing). */
+async function inviteNearby(c, actor) {
   const w = c.world;
-  const next = w.weekend && w.period === 0 ? { en: 'Afternoon', ja: '午後' } : { en: 'Evening', ja: '夜' };
+  if (w.save.flags.fd !== 'done' || w.level(actor.npc.id) < 2) return [];
+  const o = c.game.npcs.nearby(actor, 12).find((x) => !x.special && !x.engaged && !x.plan && x.mode !== 'search' && w.level(x.npc.id) >= 2 && !w.planWith(x.npc.id));
+  if (!o) return [];
+  const name = o.npc.name;
   const r = await c.ask([
-    opt('go', "Let's go!", '行こう！', { emoji: '✅', phrases: ['lets go', 'yes', 'ok', 'lets play', 'sure'], keys: YES_KEYS, tone: 'go' }),
-    opt('no', 'Not now.', '今はやめておく。', { emoji: '✋', phrases: ['not now', 'no', 'later'], keys: NO_KEYS, tone: 'quiet' }),
-  ], { banner: { icon: '⏳', en: `${en}  It uses your ${periodWord(w)} time → ${next.en}`, ja: `${ja}（${periodWord(w) === 'After School' ? '放課後' : w.period === 0 ? '朝' : '午後'}の時間を使います）` }, silent: false });
-  return r.id === 'go';
+    opt('invite', `Let's invite ${name}, too!`, `${name}もさそおう！`, { emoji: '🧑‍🤝‍🧑', phrases: [`let's invite ${name.toLowerCase()}`, 'invite'], keys: [['invite', name.toLowerCase()]], area: 'wantto', expr: 'a.invite', template: "Let's invite ___, too!" }),
+    opt('two', 'Just us two!', '二人で行こう！', { emoji: '🙂', phrases: ['just us two', 'just us'], keys: [['just', 'two', 'us']] }),
+  ]);
+  if (r.id !== 'invite') return [];
+  await c.join(o);
+  await c.ask([opt('come', `${name}, do you want to come?`, `${name}、いっしょに来る？`, { emoji: '💌', phrases: ['do you want to come', 'want to come'], keys: [['come']], area: 'wantto', expr: 'q.wantcome', template: 'Do you want to come?' })]);
+  await c.say(o, sline(c, o.npc, 'inviteYes'), { gesture: styleGesture(o.npc, 'happy'), expr: 'happy' });
+  return [o];
 }
 
 // ---------------------------------------------------------------- plans
 
 async function planFlow(c, actor, plan) {
+  if (plan.eventId) { await plannedEventFlow(c, actor, plan); return; }
   const w = c.world, npc = actor.npc;
   const v = actVerb(plan.act, npc.likes.find((l) => interest(l).activity === plan.act));
   await c.say(actor, line(`You came! Let's ${v.en}!`, `来てくれた！${jaLets(v.ja)}！`, { expr: 'a.lets', area: 'wantto' }), { gesture: 'happy', expr: 'happy' });
-  const ok = await confirmTime(c, `${v.emoji} ${v.en.charAt(0).toUpperCase() + v.en.slice(1)} with ${npc.name}?`, `${npc.name}と${v.ja}？`);
+  // A group plan: everyone who came joins in.
+  const others = plan.npcIds.filter((id) => id !== npc.id).map((id) => c.game.npcs.actorFor(id)).filter(Boolean);
+  for (const o of others) {
+    await c.join(o);
+    await c.say(o, sline(c, o.npc, 'inviteYes'), { gesture: styleGesture(o.npc, 'happy'), expr: 'happy' });
+  }
+  const names = [npc.name, ...others.map((o) => o.npc.name)];
+  const ok = await confirmTime(c, `${v.emoji} ${v.en.charAt(0).toUpperCase() + v.en.slice(1)} with ${listEn(names)}?`, `${names.join('と')}と${v.ja}？`);
   if (!ok) { await c.say(actor, line("OK! I'll wait here!", 'オッケー！ここで待ってるね！')); return; }
-  c.result = { then: () => c.game.activities.run(plan.act, [actor], { plan }) };
+  c.result = { then: () => c.game.activities.run(plan.act, [actor, ...others], { plan }) };
 }
 
 // ---------------------------------------------------------------- introductions
@@ -611,28 +762,8 @@ async function introduceNewFriend(c, actor, other) {
 }
 
 async function topicIntroduce(c, actor, other) {
-  const w = c.world, npc = actor.npc, o = other.npc;
-  await c.join(other);
-  const facts = [0, 1, 2].filter((i) => w.knows(o.id, `like:${i}`)).map((i) => ({ kind: 'like', i }));
-  [0, 1].filter((i) => w.knows(o.id, `can:${i}`)).forEach((i) => facts.push({ kind: 'can', i }));
-  const p = P(o);
-  const cards = facts.slice(0, 3).map((f) => {
-    if (f.kind === 'like') { const it = interest(o.likes[f.i]); return opt(`l${f.i}`, `${p.S} likes ${it.en}.`, `${it.ja}が好きなんだ。`, { emoji: it.emoji, keys: [[it.en.replace(/^the /, '')]], area: 'intro', expr: 'i.likes', template: 'He/She likes ___.' }); }
-    const a = ability(o.cans[f.i]); return opt(`c${f.i}`, `${p.S} can ${a.en}.`, `${a.ja}んだ。`, { emoji: a.emoji, keys: [[a.en.split(' ')[0]]], area: 'intro', expr: 'i.can', template: 'He/She can ___.' });
-  });
-  await c.ask([opt('friend', `${p.S} is my friend.`, '友達なんだ。', { emoji: '🤝', phrases: [`${p.s} is my friend`, 'my friend'], area: 'intro', expr: 'i.friend', template: 'He/She is my friend.' })]);
-  const said = await c.ask(cards);
-  await c.say(actor, line(`Nice to meet you, ${o.name}!`, `はじめまして、${o.name}！`), { gesture: 'wave', expr: 'happy' });
-  await c.say(other, line('Nice to meet you, too!', 'こちらこそ！'), { gesture: 'wave', expr: 'happy' });
-  const likeIdx = said.id.startsWith('l') ? Number(said.id.slice(1)) : -1;
-  if (likeIdx >= 0 && npc.likes.includes(o.likes[likeIdx])) {
-    await c.say(actor, line(`You like ${interest(o.likes[likeIdx]).en}? Me too!`, `${interest(o.likes[likeIdx]).ja}が好きなの？わたしも！`), { gesture: 'happy', expr: 'happy' });
-  }
-  w.connect(npc.id, o.id, 1);
-  w.xp(npc.id, 4, { key: `pintro:${o.id}`, reason: 'intro' });
-  w.xp(o.id, 4, { key: `pintro:${npc.id}`, reason: 'intro' });
-  c.game.hud.toast({ icon: '🤝', en: `${npc.name} and ${o.name} are friends now!`, ja: `${npc.name}と${o.name}が友達になった！` });
-  await c.leave(other);
+  // Three-line introduction shared with the meet_request event (events.js).
+  await playerIntro(c, actor, other);
 }
 
 // ---------------------------------------------------------------- quiz, birthday

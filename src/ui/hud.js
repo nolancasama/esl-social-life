@@ -9,6 +9,15 @@ import { speech, MIC_REASON } from '../dialogue/speech.js';
 import { LEVEL_NAMES, WEATHER, LOCATIONS, DAYS, MONTHS } from '../data/content.js';
 import { hearts } from '../dialogue/runner.js';
 import { ACT_INFO } from '../game/world.js';
+import { instance, openOffers } from '../world/friendship.js';
+import { eventTitle } from '../dialogue/events.js';
+
+/** What a plan is called: its friendship event's title, or the activity. */
+function planInfo(w, plan) {
+  const inst = plan.eventId ? instance(w.save, plan.eventId) : null;
+  if (inst) { const t = eventTitle(w, inst); return { en: t.en, ja: t.ja, emoji: t.emoji, event: true }; }
+  return ACT_INFO[plan.act] || { en: 'meet up', ja: '会う', emoji: '⭐' };
+}
 
 export class HUD {
   constructor(root, game) {
@@ -113,10 +122,14 @@ export class HUD {
     const plan = w.upcomingPlans()[0];
     if (plan && plan.day === w.day) {
       const n = w.npc(plan.npcIds[0]);
-      const a = ACT_INFO[plan.act];
+      const a = planInfo(w, plan);
       if (plan.period === w.period) return { icon: '⭐', en: `${a.emoji} Meet ${n.name} at ${LOCATIONS[plan.loc].en}`, ja: `${LOCATIONS[plan.loc].ja}で${n.name}に会おう`, loc: plan.loc, npc: n.id };
-      if (w.schoolTime) return { icon: '🪑', en: `After school: ${a.en} with ${n.name}. Sit at your desk to start class.`, ja: `放課後に${n.name}と約束！席にすわって授業を始めよう。`, desk: true };
+      if (w.schoolTime) return { icon: '🪑', en: `After school: ${a.event ? `${a.emoji} ${a.en}` : `${a.en} with ${n.name}`}. Sit at your desk to start class.`, ja: `放課後に${n.name}と約束！席にすわって授業を始めよう。`, desk: true };
     }
+    // A present to deliver (kept in the save, so it survives a reload).
+    const del = openOffers(w.save).find((i) => i.template === 'delivery' && i.data?.accepted);
+    const target = del && w.npc(del.data.target);
+    if (target && !w.evening) return { icon: '🎁', en: `Give the ${del.data.present.en} to ${target.name}`, ja: `${target.name}に${del.data.present.ja}をわたそう`, npc: target.id };
     if ((fd === 'played' || fd === 'planned') && w.evening) return { icon: '📖', en: 'Check your journal, then go to bed.', ja: '友達ノートを見て、ねよう。' };
     if (w.evening) return { icon: '🛏️', en: 'Read messages, then go to bed.', ja: 'メッセージを読んで、ねよう。' };
     if (w.schoolTime && fd !== 'start') return { icon: '🪑', en: 'Talk to classmates. Sit at your desk to start class.', ja: 'クラスメートと話そう。席にすわると授業が始まるよ。', desk: true, quiet: true };
@@ -224,11 +237,12 @@ export class HUD {
     if (!plan) return;
     const w = this.game.world;
     const n = w.npc(plan.npcIds[0]);
-    const a = ACT_INFO[plan.act];
+    const a = planInfo(w, plan);
     const day = plan.day === w.day ? 'Today' : DAYS[((plan.day % 7) + 7) % 7].en;
     const per = plan.period === 0 ? 'morning' : (((plan.day % 7) + 7) % 7) >= 5 ? 'afternoon' : 'after school';
     sfx.great();
-    this.toast({ icon: '⭐', en: `New plan! ${day} ${per}: ${a.en} with ${n.name}`, ja: `約束ができた！${n.name}と${a.ja}`, ms: 3800 });
+    if (a.event) this.toast({ icon: a.emoji, en: `New plan! ${day} ${per}: ${a.en}`, ja: `約束ができた！${a.ja}`, ms: 3800 });
+    else this.toast({ icon: '⭐', en: `New plan! ${day} ${per}: ${a.en} with ${n.name}`, ja: `約束ができた！${n.name}と${a.ja}`, ms: 3800 });
     this.refresh();
   }
 

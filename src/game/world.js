@@ -11,6 +11,11 @@ import { logExpr, areaNeed } from '../world/progression.js';
 import { interest, DAYS, LOST_ITEMS, LOCATIONS, VISITORS } from '../data/content.js';
 import { validPairs } from '../world/directions.js';
 import { isVisibleLoc } from '../world/generator.js';
+import { onPlanMissed, expireOld, lostItemFor, npcFree, canOffer, eligibleEvents, offerEvent, nextEventSlot } from '../world/friendship.js';
+
+const VISIT_ONLY = new Set(['home_visit']);
+import { scheduleHangout, settleHangouts } from '../world/social.js';
+import { styleData } from '../world/personality.js';
 
 export const ACT_INFO = {
   soccer: { en: 'play soccer', ja: 'サッカーをする', emoji: '⚽', loc: 'park', outdoor: true },
@@ -42,7 +47,7 @@ export class World {
   get evening() { return this.period === EVENING; }
   weatherOn(day) { return weatherFor(this.cls.seed, day, this.save.weatherOverrides || {}); }
 
-  get ctx() { return { seed: this.cls.seed, weather: (d) => this.weatherOn(d), plans: this.save.plans }; }
+  get ctx() { return { seed: this.cls.seed, weather: (d) => this.weatherOn(d), plans: this.save.plans, npcPlans: this.save.npcPlans || [] }; }
 
   // ------------------------------------------------------------ people
   npc(id) { return this.byId.get(id) || null; }
@@ -64,7 +69,13 @@ export class World {
   xp(id, amount, opts = {}) { return addXp(this.save, id, amount, { day: this.day, ...opts }); }
   learn(id, fact) { return learnFact(this.save, id, fact, this.day); }
   discover(a, b) { if (discoverLink(this.save, a, b)) bus.emit('link', { a, b }); }
-  connect(a, b, strength = 1) { setNpcLink(this.save, a, b, strength); this.discover(a, b); }
+  /** Make two classmates closer (never lower). A new or stronger link means they will meet up on their own. */
+  connect(a, b, strength = 1, source = 'play') {
+    const before = this.link(a, b);
+    setNpcLink(this.save, a, b, strength);
+    this.discover(a, b);
+    if (this.link(a, b) > before) scheduleHangout(this, a, b, { source });
+  }
 
   // ------------------------------------------------------------ schedules
   slot(npc, day = this.day, period = this.period) { return resolveSlot(this.ctx, npc, day, period); }
@@ -104,10 +115,17 @@ export class World {
   }
 
   // ------------------------------------------------------------ memories & souvenirs
-  addMemory({ npcIds, type, act = null, detail = {}, photo = null, phrase = null }) {
+  /**
+   * focus: the NPCs for whom this was a personal experience (default: all of
+   * npcIds). Only focus NPCs get it in rel.memories, which is what the level
+   * gate counts; a group outing passes focus [] (XP and links, no gate).
+   */
+  addMemory({ npcIds, type, act = null, detail = {}, photo = null, phrase = null, focus = null }) {
+    const f = Array.isArray(focus) ? focus.filter((id) => npcIds.includes(id)) : npcIds;
     const m = { id: makeId('mem'), day: this.day, period: this.period, npcIds, type, act, detail, phrase, hasPhoto: Boolean(photo) };
+    if (Array.isArray(focus)) m.focus = f;
     this.save.memories.unshift(m);
-    for (const id of npcIds) { const r = this.rel(id); r.memories.unshift(m.id); r.memories = r.memories.slice(0, 20); }
+    for (const id of f) { const r = this.rel(id); r.memories.unshift(m.id); r.memories = r.memories.slice(0, 20); }
     return m;
   }
   memoriesWith(npcId) { return this.save.memories.filter((m) => m.npcIds.includes(npcId)); }
@@ -165,7 +183,8 @@ export class World {
     const candidates = this.npcs.filter((n) => this.isKnown(n.id) && resolveSlot(this.ctx, n, this.day, freePeriod).loc === 'park');
     if (!candidates.length) return;
     const npc = rng.pick(candidates);
-    daily.lost = { npcId: npc.id, period: freePeriod, item: rng.pick(LOST_ITEMS).id, hide: null, variant: rng.chance(0.5) ? 'clue' : 'search' };
+    // The item belongs to the friend's interests when it can (a reader loses a book).
+    daily.lost = { npcId: npc.id, period: freePeriod, item: lostItemFor(npc, rng), hide: null, variant: rng.chance(0.5) ? 'clue' : 'search' };
   }
 
   // ------------------------------------------------------------ advancing time
@@ -180,20 +199,26 @@ export class World {
     for (const p of this.save.plans) {
       if (p.status === 'pending' && p.day === from.day && p.period === from.period) {
         p.status = 'missed';
+        onPlanMissed(this.save, p, this.day);
         const npc = this.npc(p.npcIds[0]);
         if (npc) this.queueEvening({ type: 'missed', from: npc.id, plan: p });
       }
     }
     this.save.time.period += 1;
+    settleHangouts(this.save, this.day, this.period);
     if (this.save.time.period === EVENING) this.makeEveningMessages();
     return { from, to: { day: this.day, period: this.period }, newDay: false };
   }
 
   sleep() {
     const from = { day: this.day, period: this.period };
-    for (const p of this.save.plans) if (p.status === 'pending' && p.day <= from.day) p.status = 'missed';
+    for (const p of this.save.plans) {
+      if (p.status === 'pending' && p.day <= from.day) { p.status = 'missed'; onPlanMissed(this.save, p, from.day + 1); }
+    }
     this.save.time.day += 1;
     this.save.time.period = MORNING;
+    expireOld(this.save, this.day);
+    settleHangouts(this.save, this.day, this.period);
     this.ensureDaily();
     return { from, to: { day: this.day, period: this.period }, newDay: true };
   }
@@ -212,6 +237,8 @@ export class World {
       if (item.type === 'thanks') {
         this.addMessage({ from: npc.id, kind: 'thanks', en: item.en, ja: item.ja });
       } else if (item.type === 'missed') {
+        // A missed friendship event comes back as an offer; no plan to re-make here.
+        if (item.plan.eventId) { this.addMessage({ from: npc.id, kind: 'thanks', en: "Are you OK? Let's do it another day! 😊", ja: 'だいじょうぶ？また別の日にやろうね！' }); continue; }
         const a = ACT_INFO[item.plan.act] || ACT_INFO.catch;
         this.addMessage({ from: npc.id, kind: 'missed', en: `Are you OK? We can ${a.en} next time! 😊`, ja: `だいじょうぶ？また今度${a.ja}ことにしよう！`, offer: { act: item.plan.act, loc: item.plan.loc } });
       }
@@ -224,12 +251,34 @@ export class World {
       if (count >= 2) break;
       const lastInv = this.rel(n.id).lastInvite ?? -99;
       if (this.day - lastInv < 3) continue;
-      if (!rng.chance(0.35 + this.level(n.id) * 0.1)) continue;
+      // The behaviour style decides how much of a friend's initiative goes to
+      // messages (the rest is in-person approaches); the total is the same.
+      const channel = 0.6 + 0.8 * styleData(n).initiative.message;
+      if (!rng.chance(Math.min(0.95, (0.35 + this.level(n.id) * 0.1) * channel))) continue;
       const inv = this.makeInvite(n, rng);
       if (!inv) continue;
       this.rel(n.id).lastInvite = this.day;
       this.addMessage({ from: n.id, kind: 'invite', ...inv });
       count++;
+    }
+    // Close friends sometimes ask to visit: "Can I come to your house on Saturday?" (home_visit, one a night).
+    const vRng = new RNG(`${this.cls.seed}|${this.save.id}|visit|${this.day}`);
+    for (const n of vRng.shuffle(this.npcs.filter((x) => this.level(x.id) >= 4))) {
+      if (!canOffer(this.save, this.day, 'home_visit')) break;
+      if (!eligibleEvents(this, n.id, { available: VISIT_ONLY }).eligible.includes('home_visit')) continue;
+      if (!vRng.chance(0.18 * (0.6 + 0.8 * styleData(n).initiative.message))) continue;
+      const slot = nextEventSlot(this, [n.id], { fromDay: this.day + 1, fromPeriod: 0, weekendFirst: vRng.chance(0.6) });
+      if (!slot) continue;
+      const inst = offerEvent(this, { template: 'home_visit', npcId: n.id, data: {} });
+      const D = DAYS[dow(slot.day)];
+      const tomorrow = slot.day === this.day + 1;
+      this.addMessage({
+        from: n.id, kind: 'invite',
+        en: `Can I come to your house ${tomorrow ? 'tomorrow' : `on ${D.en}`}? I want to see your room! 🏠`,
+        ja: `${tomorrow ? 'あした' : `${D.ja}に`}家に遊びに行ってもいい？部屋を見てみたいな！`,
+        invite: { act: 'visit', loc: 'home', day: slot.day, period: slot.period, status: 'pending', eventId: inst.id },
+      });
+      break;
     }
   }
 
@@ -243,9 +292,15 @@ export class World {
     const day = DAYS[dow(slot.day)];
     const when = slot.day === this.day + 1 ? (slot.period === AFTERNOON && !isWeekend(slot.day) ? 'tomorrow after school' : 'tomorrow') : `on ${day.en}`;
     const whenJa = slot.day === this.day + 1 ? 'あした' : `${day.ja}に`;
-    const en = act === 'cafe' ? `Let's go to the café ${when}! Do you want to come?` : `Let's ${a.en} ${when}! Do you want to come?`;
-    const ja = `${whenJa}${a.ja}のはどう？いっしょに来る？`;
-    return { en, ja, invite: { act, loc: a.loc, day: slot.day, period: slot.period, status: 'pending' } };
+    // Good friends sometimes bring one of their friends along (a group outing).
+    const pal = this.level(npc.id) >= 3 && rng.chance(0.3)
+      ? this.npcs.find((o) => o.id !== npc.id && this.isKnown(o.id) && this.link(npc.id, o.id) >= 2 && npcFree(this, o.id, slot.day, slot.period))
+      : null;
+    const withEn = pal ? ` with ${pal.name}` : '';
+    const withJa = pal ? `${pal.name}と` : '';
+    const en = act === 'cafe' ? `Let's go to the café${withEn} ${when}! Do you want to come?` : `Let's ${a.en}${withEn} ${when}! Do you want to come?`;
+    const ja = `${whenJa}${withJa}${a.ja}のはどう？いっしょに来る？`;
+    return { en, ja, invite: { act, loc: a.loc, day: slot.day, period: slot.period, status: 'pending', with: pal ? [pal.id] : [] } };
   }
 
   // ------------------------------------------------------------ helpers for talk

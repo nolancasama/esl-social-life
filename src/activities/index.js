@@ -15,6 +15,34 @@ import { sfx } from '../core/audio.js';
 import { wait } from '../core/util.js';
 import { bus } from '../core/events.js';
 import { guideVisitor } from './directions.js';
+import { playMilestone } from './milestone.js';
+import { startEvent, completeEvent, offerEvent } from '../world/friendship.js';
+import { eventTitle, FLOWS } from '../dialogue/events.js';
+import { makeId } from '../core/util.js';
+
+// Shelf souvenirs for friendship events (engine/food.js draws them).
+const EVENT_SOUVENIR = { special_day: 'party', best_friend: 'keepsake', practice: 'medal', project: 'card', home_visit: 'visit' };
+const VARIANT_SOUVENIR = { draw: 'drawing', spot: 'nature', music: 'music' };
+
+function eventSouvenir(event, act, result) {
+  if (event.template === 'hobby') return VARIANT_SOUVENIR[result.detail?.variant] || act;
+  return EVENT_SOUVENIR[event.template] || act;
+}
+
+function eventThanks(event, w, result) {
+  const o = event.data?.occasion;
+  const v = result.detail?.variant;
+  if (event.template === 'best_friend') return [`Thank you for today, ${w.save.player.name}! You're my best friend! 🌟`, `今日はありがとう、${w.save.player.name}！ずっと親友だよ！`];
+  if (o?.kind === 'birthday') return ['Thank you for my birthday party! It was the best day! 🎂', 'お誕生日会、ありがとう！最高の一日だった！'];
+  if (event.template === 'special_day') return ['Thank you for the party! It was so much fun! 🎉', 'パーティー、ありがとう！すごく楽しかった！'];
+  if (event.template === 'practice') return ['Thank you for helping me practice! 💪', '練習を手伝ってくれてありがとう！'];
+  if (event.template === 'home_visit') return ['Thank you for inviting me to your house! I had fun! 🏠', '家にさそってくれてありがとう！楽しかった！'];
+  if (event.template === 'project') { const r = w.npc(event.data.recipient); return [`Let's give our card to ${r?.name || 'our friend'}! 💌`, `${r?.name || ''}にカードをわたそうね！`]; }
+  if (v === 'draw') return ['Thank you for drawing with me! 🎨', 'いっしょに絵をかいてくれてありがとう！'];
+  if (v === 'spot') return ['That was a fun adventure! Thank you! 🐞', '楽しいぼうけんだったね！ありがとう！'];
+  if (v === 'music') return ['Thank you for the music time! 🎵', '音楽の時間、ありがとう！'];
+  return ['Thank you for today! It was fun! 😊', '今日はありがとう！楽しかった！'];
+}
 
 const ACT_NAMES = {
   soccer: { en: 'Soccer at Sakura Park', ja: 'さくら公園でサッカー', thanks: ['Thank you for today! Soccer was fun! ⚽', '今日はありがとう！サッカー楽しかったね！'] },
@@ -37,14 +65,27 @@ export class Activities {
 
   startDirections(actor, event) { return guideVisitor(this.game, actor, event); }
 
-  async run(act, actors, { plan = null, like = null } = {}) {
+  /** Best-friend milestone (an event activity with its own scene). */
+  runMilestone(actor, event, plan) {
+    return this.run('best_friend', [actor], { plan, event, play: (game, actors) => playMilestone(game, actors[0]) });
+  }
+
+  /**
+   * Run a shared activity. With `event` (a friendship event instance) the
+   * rewards go through completeEvent: one memory, the event's XP once, its
+   * cooldown and history; otherwise the ordinary activity rewards apply.
+   */
+  async run(act, actors, { plan = null, like = null, event = null, variant = null, play = null } = {}) {
     const game = this.game;
     const w = game.world;
     game.setMode('activity');
     game.hud.setActivity(true);
+    if (event) startEvent(w.save, event.id);
     let result = null;
     try {
-      result = act === 'cafe' ? await playCafe(game, actors, { plan }) : await playBall(game, actors, { soccer: act === 'soccer', like });
+      if (play) result = await play(game, actors);
+      else if (act === 'cafe') result = await playCafe(game, actors, { plan, celebrate: variant?.celebrate || null });
+      else result = await playBall(game, actors, { soccer: act === 'soccer', like });
     } catch (err) {
       console.error('[activity] failed', err);
       result = { score: 0, detail: {}, error: true };
@@ -57,15 +98,37 @@ export class Activities {
     // Rewards: connection, memory, souvenir, thank-you message.
     const ids = actors.map((a) => a.npc.id);
     const before = Object.fromEntries(ids.map((id) => [id, w.level(id)]));
-    const info = ACT_NAMES[act];
-    const mem = w.addMemory({ npcIds: ids, type: 'activity', act, detail: result.detail || {}, photo: result.photo, phrase: result.phrase || null });
-    for (const id of ids) {
-      w.xp(id, 10, { reason: 'activity' });
-      w.xp(id, 4, { key: `act:${act}`, reason: 'first' });
+    let info = ACT_NAMES[act] || { en: 'A fun time together', ja: 'いっしょに楽しい時間', thanks: ['Thank you for today! 😊', '今日はありがとう！'] };
+    let mem;
+    let souvenir;
+    if (event) {
+      const t = eventTitle(w, event);
+      info = { en: `${t.emoji} ${t.en}`, ja: t.ja, thanks: eventThanks(event, w, result) };
+      const r = completeEvent(w, event.id, { act: ACT_NAMES[act] ? act : null, detail: result.detail || {}, photo: result.photo, phrase: result.phrase || null, remembered: !!result.remembered });
+      mem = r.memory || { id: makeId('mem') };
+      souvenir = w.addSouvenir(eventSouvenir(event, act, result), ids[0]);
+      if (!r.already) FLOWS[event.template]?.after?.(game, event, result);
+    } else if (ids.length >= 2) {
+      // Group outing: XP for every friend and closer friends, but no level gate
+      // (only one-on-one time opens levels; DESIGN_DECISIONS 2026-11-16).
+      const inst = offerEvent(w, { template: 'group_outing', npcId: ids[0], data: { with: ids.slice(1), act } });
+      const pairs = [];
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) pairs.push([ids[i], ids[j], 2]);
+      const r = completeEvent(w, inst.id, { npcIds: ids, xpTo: ids, act, links: pairs, detail: result.detail || {}, photo: result.photo, phrase: result.phrase || null });
+      for (const id of ids) w.xp(id, 4, { key: `act:${act}`, reason: 'first' });
+      mem = r.memory;
+      souvenir = w.addSouvenir(act, ids[0]);
+      info = { ...info, en: `${info.en} with friends`, ja: `${info.ja}（みんなで）` };
+    } else {
+      mem = w.addMemory({ npcIds: ids, type: 'activity', act, detail: result.detail || {}, photo: result.photo, phrase: result.phrase || null });
+      for (const id of ids) {
+        w.xp(id, 10, { reason: 'activity' });
+        w.xp(id, 4, { key: `act:${act}`, reason: 'first' });
+      }
+      for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) w.connect(ids[i], ids[j], 2);
+      souvenir = w.addSouvenir(act, ids[0]);
     }
-    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) w.connect(ids[i], ids[j], 2);
     if (result.photo) addPhoto(w.save.id, { id: mem.id, url: result.photo, day: w.day, act, npcIds: ids, caption: info.en, phrase: result.phrase || '' });
-    const souvenir = w.addSouvenir(act, ids[0]);
     w.queueEvening({ type: 'thanks', from: ids[0], en: info.thanks[0], ja: info.thanks[1] });
     if (plan) w.completePlan(plan);
     w.save.stats.activities = (w.save.stats.activities || 0) + 1;
@@ -162,8 +225,9 @@ export class Activities {
     await c2.say(s.actor, line(`My ${s.item.en}! Thank you, ${game.world.save.player.name}! You're so kind!`, `わたしの${s.item.ja}！ありがとう、${game.world.save.player.name}！やさしいね！`, { area: 'adjectives', expr: 'adj.kind', template: "You're kind!" }), { gesture: 'happy', expr: 'happy' });
     await c2.ask([opt('welcome', "You're welcome!", 'どういたしまして！', { emoji: '😊', phrases: ["you're welcome", 'you are welcome', 'no problem', 'welcome'], keys: [['welcome', 'problem']] })]);
     const w = game.world;
-    w.addMemory({ npcIds: [npc.id], type: 'help', detail: { item: s.item.en, itemJa: s.item.ja, prep: h.prep, obj: h.obj.en } });
-    w.xp(npc.id, 8, { key: `help:${w.day}`, reason: 'help' });
+    // The favour is a friendship event (template `find`): memory, XP once, history.
+    const inst = offerEvent(w, { template: 'find', npcId: npc.id, data: { item: s.item.id } });
+    completeEvent(w, inst.id, { act: null, detail: { item: s.item.en, itemJa: s.item.ja, prep: h.prep, obj: h.obj.en } });
     w.addSouvenir('help', npc.id);
     w.queueEvening({ type: 'thanks', from: npc.id, en: `Thank you for finding my ${s.item.en}! You're my hero! 🦸`, ja: `${s.item.ja}を見つけてくれてありがとう！` });
     w.daily.lostDone = true;

@@ -4,6 +4,7 @@
 // inferred from the name.
 
 import { RNG, hashString } from '../core/rng.js';
+import { assignStyles } from './personality.js';
 import {
   INTERESTS, ABILITIES, FOODS, DRINKS, SUBJECTS, PETS, ADJECTIVES, ATTRACTIONS,
   HOME_ACTS, AWAY_ACTS, interest, LOCATIONS,
@@ -394,6 +395,8 @@ export function buildClass(roster, seed, prev = null) {
   }
   if (!prev) alignGroups(npcs, new RNG(`${seed}|align`));
   ensureLiveliness(npcs, new RNG(`${seed}|lively`));
+  // Behaviour styles: kept for existing profiles, balanced for newcomers.
+  assignStyles(npcs, seed);
   return npcs;
 }
 

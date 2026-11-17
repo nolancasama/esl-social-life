@@ -8,6 +8,8 @@ import { NODES, exitsAt, headingBetween } from '../world/directions.js';
 import { damp, angleDelta } from '../core/util.js';
 import { StaticBuilder } from '../engine/builder.js';
 import { makeBlobShadow } from '../engine/materials.js';
+import { styleData, styleLine, styleGesture } from '../world/personality.js';
+import { canApproach, noteApproach, openOffers } from '../world/friendship.js';
 
 export const TEACHER = {
   id: 'teacher', name: 'Ms. Aoki', role: 'Teacher 先生', color: '#4C6FFF', voice: { pitch: 1.05, rate: 0.9 },
@@ -111,19 +113,22 @@ export class NpcManager {
 
     // Plans with the player happen at the activity spot.
     for (const plan of w.plansNow()) {
-      for (const id of plan.npcIds) {
+      const n = plan.npcIds.length;
+      plan.npcIds.forEach((id, k) => {
         const e = take(id);
-        if (!e) continue;
+        if (!e) return;
         if (sceneId === 'town' && plan.loc === 'park') {
           const f = scene.field;
-          this._spawn(e, f.b.x + (this.placed.length % 2) * 1.2, f.b.z, 0, 'stand', { gesture: 'cheer', plan: true, prop: plan.act === 'soccer' ? 'ball' : 'baseball' });
+          this._spawn(e, f.b.x + k * 1.2 - (n - 1) * 0.6, f.b.z, 0, 'stand', { gesture: 'cheer', plan: true, prop: k === 0 && plan.act === 'soccer' ? 'ball' : k === 0 && plan.act === 'catch' ? 'baseball' : null });
         } else if (sceneId === 'cafe') {
-          const seat = scene.seats.find((s) => s.table === 'T2' && s.id.endsWith('-1'));
+          const seat = scene.seats.find((s) => s.id === `T2-${[1, 3, 2][k] ?? 1}`) || scene.seats.find((s) => s.id === 'T2-1');
           this._spawn(e, seat.x, seat.z, seat.yaw, 'sit', { seatY: seat.seatY, plan: true });
+        } else if (sceneId === 'home') {
+          this._arriveHome(e, k);
         } else {
           this._placeSingle(e);
         }
-      }
+      });
     }
 
     // Lost item: the classmate is searching near the playground.
@@ -154,14 +159,21 @@ export class NpcManager {
     }
     for (const e of present.slice()) { take(e.n.id); this._placeSingle(e); }
 
-    // Approaches: close friends (and the day-one friend the next morning) come to you.
+    // Approaches. The day-one friend comes over the next morning (scripted).
+    // From Lv3, friends may come over on their own: a "soft" approach (wave,
+    // one line, then they wait; walking away is fine). Limits: one per scene
+    // entry, two a day, one per friend a day; the style changes how often a
+    // friend comes in person (the rest of their initiative goes to messages).
+    const fdDone = w.save.flags.fd === 'done';
     for (const a of this.actors) {
-      if (a.special) continue;
+      if (a.special || a.plan) continue;
       const id = a.npc.id;
       if (w.daily.approached[id]) continue;
+      if (w.save.flags.fd === 'slept' && id === w.save.introNpc) { this.approachQueue.unshift({ actor: a, delay: 1.0, scripted: true }); continue; }
       const lvl = w.level(id);
-      const dayOne = w.save.flags.fd === 'slept' && id === w.save.introNpc;
-      if (dayOne || (lvl >= 4 && Math.random() < 0.6)) this.approachQueue.push({ actor: a, delay: dayOne ? 1.0 : 2.5 + Math.random() * 2 });
+      if (!fdDone || lvl < 3 || a.mode === 'ball' || a.mode === 'search' || !canApproach(w.save, w.day, id)) continue;
+      const chance = (0.2 + 0.5 * styleData(a.npc).initiative.approach) * (lvl >= 4 ? 1 : 0.7);
+      if (Math.random() < chance) this.approachQueue.push({ actor: a, delay: 4 + Math.random() * 3, scripted: false });
     }
     this.approachQueue = this.approachQueue.slice(0, 1);
   }
@@ -318,6 +330,18 @@ export class NpcManager {
   // ------------------------------------------------------------ queries
   actorFor(id) { return this.actors.find((a) => a.npc.id === id) || null; }
 
+  /**
+   * The actor for a classmate in this scene, spawning them near (x, z) when
+   * they are not here (an activity moved scenes, a visitor arrives, …).
+   */
+  ensure(npc, x = 0, z = 0, yaw = 0) {
+    const have = this.actorFor(npc.id);
+    if (have) return have;
+    this.placed = this.placed || [];
+    const p = this.scene.collision.nearestFree(x, z, 0.3);
+    return this._spawn({ n: npc, slot: null, zone: 'room' }, p.x, p.z, yaw, 'stand');
+  }
+
   removeActor(a) {
     a.char.root.removeFromParent();
     a.char.dispose();
@@ -356,6 +380,8 @@ export class NpcManager {
     if (w.planWith(id) && (w.planWith(id).loc === this.game.locationId)) return '⭐';
     if (w.save.flags.fd === 'start' && id === w.save.firstFriend) return '💬';
     if (w.save.flags.fd === 'introduced' && id === w.save.introNpc) return '💬';
+    if (a.waiting) return '💬';
+    if (openOffers(w.save).some((i) => i.template === 'delivery' && i.data?.accepted && i.data.target === id)) return '🎁';
     const { m, d } = w.date;
     if (a.npc.birthday.m === m && a.npc.birthday.d === d && w.knows(id, 'birthday') && !w.daily.wished[id]) return '🎂';
     return '';
@@ -366,6 +392,7 @@ export class NpcManager {
     if (!a || a.engaged) return;
     a.engaged = true;
     a.walk = null;
+    a.waiting = null;
     a.savedMode = a.mode;
     if (a.char.base === 'sit') a.char.setBase('idle');
     a.char.stopGesture();
@@ -412,14 +439,16 @@ export class NpcManager {
       c.lod = dPlayer > 24 ? 1 : 0;
       if (a.walk) {
         this._stepWalk(a, dt);
+      } else if (a.waiting && !a.engaged) {
+        this._stepWaiting(a, dt, dPlayer);
       } else if (!a.engaged) {
         if (a.mode === 'route') this._stepRoute(a, dt, dPlayer);
         else if (a.mode === 'chat') this._stepChat(a, dt);
-        // Look at the player when close; known friends wave once.
+        // Look at the player when close. Acquaintances say hello; friends wave.
         if (a.mode !== 'route' && a.mode !== 'ball') {
           if (dPlayer < 3.4 && game.mode === 'explore') {
             c.lookAt(px, 1, pz);
-            if (!a.waved && !a.special && game.world.isKnown(a.npc.id) && dPlayer < 3 && a.mode !== 'sit') { a.waved = true; c.play('wave', 1.3); }
+            if (!a.waved && !a.special && dPlayer < 3) this._greetNearby(a);
           } else c.lookAt(null);
         }
       }
@@ -431,34 +460,110 @@ export class NpcManager {
     // Approaches
     if (this.approachQueue.length && game.mode === 'explore') {
       const q = this.approachQueue[0];
-      q.delay -= dt;
-      if (q.delay <= 0 && !q.started) {
-        q.started = true;
+      const busy = game.activities.search || game.activities._directions;
+      if (!q.scripted && busy) this.approachQueue.shift();
+      else q.delay -= dt;
+      if (this.approachQueue[0] === q && q.delay <= 0 && !q.started) {
         const a = q.actor;
-        game.world.daily.approached[a.npc.id] = true;
+        const w = game.world;
+        // Soft approaches need a clear walk (no weaving between desks); otherwise skip quietly.
+        if (!q.scripted) {
+          const p0 = game.player, from = a.char.root.position;
+          const ang0 = Math.atan2(from.x - p0.x, from.z - p0.z);
+          const to = this.scene.collision.nearestFree(p0.x + Math.sin(ang0) * 1.6, p0.z + Math.cos(ang0) * 1.6, 0.3);
+          if (!this._walkable(from.x, from.z, to.x, to.z)) { this.approachQueue.shift(); return; }
+        }
+        q.started = true;
+        w.daily.approached[a.npc.id] = true;
+        if (!q.scripted) noteApproach(w.save, w.day, a.npc.id);
         a.engaged = true;
         a.savedMode = a.mode;
         if (a.char.base === 'sit') a.char.setBase('idle');
         a.char.stopGesture();
-        a.char.play('wave', 1.4);
-        a.bubble = { text: '👋', t: 2.5 };
-        const go = () => {
-          const p = game.player;
-          const ang = Math.atan2(a.char.root.position.x - p.x, a.char.root.position.z - p.z);
-          const tx = p.x + Math.sin(ang) * 1.3, tz = p.z + Math.cos(ang) * 1.3;
-          const spot = this.scene.collision.nearestFree(tx, tz, 0.3);
-          return spot;
-        };
-        const s = go();
+        a.char.play(q.scripted ? 'wave' : styleGesture(a.npc, 'greet'), 1.4);
+        a.bubble = { text: q.scripted ? '👋' : this._line(a, 'approach'), t: q.scripted ? 2.5 : 9 };
+        const p = game.player;
+        const ang = Math.atan2(a.char.root.position.x - p.x, a.char.root.position.z - p.z);
+        const r = q.scripted ? 1.3 : 1.6;
+        const s = this.scene.collision.nearestFree(p.x + Math.sin(ang) * r, p.z + Math.cos(ang) * r, 0.3);
         a.walk = {
           x: s.x, z: s.z, speed: 2.4, t: 0, resolve: () => {
             this.approachQueue.shift();
             a.engaged = false;
-            if (game.mode === 'explore') game.talkTo(a);
-            else this.release(a);
+            if (q.scripted) {
+              if (game.mode === 'explore') game.talkTo(a);
+              else { a.engaged = true; this.release(a); }
+              return;
+            }
+            // Soft approach: they came to see you and wait a little. Talking
+            // opens what they came for; walking away is fine.
+            a.waiting = { t: 8 };
+            a.approached = true;
+            a.char.faceToward(game.player.x, game.player.z, 6);
           },
         };
       }
+    }
+  }
+
+  /** A friend visiting the player's room (home_visit): in through the door, over to the rug, a wave. */
+  _arriveHome(e, k = 0) {
+    const door = this.scene.spawns.door;
+    const a = this._spawn(e, door.x + 0.2, door.z + 0.3 * k, -Math.PI / 2, 'stand', { plan: true });
+    const spot = this.scene.collision.nearestFree(0.9 + k * 0.8, 1.1, 0.3);
+    a.home = { x: spot.x, z: spot.z, yaw: Math.PI };
+    this.walkTo(a, spot.x, spot.z, 1.8).then(() => {
+      if (a.engaged) return;
+      a.char.faceToward(this.game.player.x, this.game.player.z, 6);
+      a.char.play('wave', 1.3);
+      a.bubble = { text: `${this._line(a, 'hello')} 🏠`, t: 3 };
+    });
+    return a;
+  }
+
+  /** Can someone walk straight from A to B? (The first steps are ignored: a seated friend starts at their desk.) */
+  _walkable(ax, az, bx, bz) {
+    const d = Math.hypot(bx - ax, bz - az);
+    if (d < 0.9) return true;
+    const t0 = Math.min(0.9, 0.7 / d);
+    return this.scene.collision.clearLine(ax + (bx - ax) * t0, az + (bz - az) * t0, bx, bz, 0.22);
+  }
+
+  /** A short English bubble from the friend's style ("Hello!", "Rio! Over here!"). */
+  _line(a, key) {
+    return styleLine(a.npc, key, { name: this.game.world.save.player.name, period: this.game.world.period })?.en || '👋';
+  }
+
+  /** Level-dependent hello when the player walks past (once per scene visit). */
+  _greetNearby(a) {
+    const w = this.game.world;
+    const lvl = w.level(a.npc.id);
+    if (lvl < 1) return;
+    a.waved = true;
+    const sitting = a.mode === 'sit';
+    if (lvl === 1) {
+      // Acquaintance: a small nod and "Hello!".
+      if (!sitting) a.char.play('nod', 1.0);
+      a.bubble = { text: this._line(a, 'hello'), t: 2.2 };
+      return;
+    }
+    // Friends wave (their own way; a 👋 bubble when seated); good friends and closer also say hi.
+    if (!sitting) a.char.play(styleGesture(a.npc, 'greet'), 1.3);
+    if (lvl >= 3) a.bubble = { text: `${this._line(a, 'hello')} 👋`, t: 2.2 };
+    else if (sitting) a.bubble = { text: '👋', t: 1.6 };
+  }
+
+  _stepWaiting(a, dt, dPlayer) {
+    const g = this.game;
+    a.waiting.t -= dt;
+    if (dPlayer < 6) a.char.lookAt(g.player.x, 1, g.player.z);
+    if (a.waiting.t <= 0 || dPlayer > 6 || g.mode !== 'explore') {
+      if (g.mode === 'talk' && a.engaged) return;
+      a.waiting = null;
+      a.approached = false;
+      a.bubble = null;
+      a.engaged = true;
+      this.release(a);
     }
   }
 

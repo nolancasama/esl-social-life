@@ -116,3 +116,86 @@ opportunities → new day.
     generation, schedules, relationships, dialogue/intents, activities,
     calendar/time, UI, persistence, roster config); small working increments;
     vertical slice first with documented extension points.
+
+---
+
+# Part 2 — Friendship Depth expansion (brief supplied 2026-11-16, condensed)
+
+Goal: make developing friendships the central, enjoyable experience. Extend the
+existing systems (do not rebuild). Persona-5-style social links as a mechanics
+reference only; original identity; Grade-5-appropriate; still open-ended with
+no deadline and no required friendship completion. Decisions and deviations:
+`DESIGN_DECISIONS.md` → 2026-11-16.
+
+- **F1 Review first:** preserve first-day intro and activity loop; reuse NPC
+  personalities, interests, schedules, network; old saves stay compatible; no
+  AI APIs/accounts/backend; run tests after each meaningful change.
+- **F2 Levels feel different:** keep Lv0–5; each level changes visible
+  behaviour (acquaintance says hello → friend waves → good friend may approach
+  → close friend remembers outings and suggests more → best friend invites
+  spontaneously and introduces people). Every level stays achievable; nothing is
+  permanently blocked by a missed event or an ordinary choice.
+- **F3 Personalities:** a few positive behaviour styles (outgoing, quiet/
+  thoughtful, playful, creative, curious, helpful/considerate) affecting
+  openings, preferred activities, invitations, minigame reactions, gestures,
+  event types, ways of showing appreciation. Not rankings. Never inferred from
+  real names, appearance or pronouns. No style has an XP advantage.
+  Deterministic and stable across saves.
+- **F4 Special friendship events:** a reusable framework with ~8–12 templates
+  built from interests, personality, memories and level (help a friend, shared
+  interests, introducing friends, remembering an experience, a friend's special
+  day). The player must actually do something; not a long talk plus XP.
+- **F5 Time:** casual talk free; major events usually cost one free period,
+  shown before starting, time advances after; small favours free; no loss for
+  being busy, declining or missing; events can be rescheduled; never break an
+  existing commitment or the calendar.
+- **F6 NPCs initiate:** at higher levels they wave, approach, invite, ask about
+  past outings, introduce friends, message about tomorrow, suggest weekend
+  outings. Limited so exploring stays free; never advances time; the player
+  chooses; NPCs keep their own schedules.
+- **F7 NPC–NPC friendships:** independent of the player, discoverable, grown
+  by group interactions and introductions (later seen together); seeded links
+  never overwritten; fictional, positive, private.
+- **F8 Group outings:** invite 2–3 NPCs to the park or café; availability
+  checked; polite declines; plan-making English ("Do you want to come?", "How
+  about Saturday?"); companions shown together, take part, each gains
+  progress; NPC–NPC links update; reuse existing activities; no XP farming.
+- **F9 Home visits:** close friends occasionally visit the player's room
+  (message or in person; accept/decline/another day); visitor spawns, walks to
+  a sensible spot, talks, does one simple activity (tabletop game, photos and
+  souvenirs, hobbies/pets talk), faces the player, leaves cleanly. Uses time and
+  memory systems; sleep, menus and saving keep working.
+- **F10 Memories:** NPCs reference specific stored memories ("We played catch
+  on Saturday!"); memories influence later choices and invitations; journal
+  shows a readable history; never invent or repeat memories wrongly.
+- **F11 Curriculum:** introductions (This is… / He is my friend / She likes… /
+  He can… / She is good at…), weekly routines, plans (Where/What do you want
+  to…? Do you want to come?), time, interests and possessions, positive
+  describing words, directions and in/on/under/by, food ordering. Existing
+  speech/tap system; no compulsory quizzes, punitive scores or above-Grade-5
+  grammar.
+- **F12 Conversation variety:** consider level, personality, interests, time,
+  place, recent activities, known info, nearby friends, pending invitations,
+  past events; don't re-ask known answers; NPCs sometimes ask the player about
+  themselves; speech optional; technical speech failures never cost anything.
+- **F13 Classroom safety:** no traits from names; no public ranking; fiction
+  never implies real students; no bullying, humiliation, exclusion, romance;
+  no reward for insults; no voice storage; local data; separate profiles.
+- **F14 Technical:** data-driven event definitions; testable eligibility,
+  selection, completion, history, personality, availability, visitors, memory
+  references; current XP and memory gates kept; existing Lv3–5 friendships keep
+  their progress; no duplicate events after save/load; interrupted events
+  handled; no new dependencies; light CPU.
+- **F15 Tests:** unit + Playwright for the 19 acceptance points (first day
+  still works; levels persist; styles stable; styles differ; events unlock by
+  level; completion records memory and progress; no farming; casual talk free;
+  major activities advance exactly one period; NPC invitations optional;
+  groups of 2 and 3; NPC–NPC links update; visitor enters and leaves; old saves
+  load; names never drive styles; speech-off fully playable; no stuck or
+  in-wall characters; usable at 1366×768; no big Chromebook regression), plus
+  one end-to-end journey (meet → grow → unlock event → complete → memory → new
+  invitation → different behaviour on a later day).
+- **F16 Order:** Phase 1 personality, events, level behaviour, memory-aware
+  follow-ups → Phase 2 groups, availability, NPC–NPC changes → Phase 3 home
+  visits. Each phase complete and tested before the next. No mall, no new
+  classrooms, no large environments.

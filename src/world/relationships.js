@@ -4,6 +4,12 @@
 // Anti-farming: every award either has a once-only key (a fact, an intro, a
 // first activity) or a per-day key. Repeating the same conversation gives
 // friendly variety, not unlimited XP. Nothing here ever REDUCES connection.
+//
+// Level gate: talking can reach Lv2; each memory in rel.memories opens one
+// more level. World.addMemory puts a memory there only for its `focus` NPCs
+// (one-on-one experiences); group outings use focus [] so they bank XP and
+// grow NPC–NPC links without opening levels. Memories saved before `focus`
+// existed count for all their NPCs, exactly as before.
 
 import { bus } from '../core/events.js';
 
