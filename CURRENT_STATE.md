@@ -8,7 +8,7 @@ friendships. Phase 3 covers home visits. The design review, with what was
 accepted, modified and added, is in DESIGN_DECISIONS.md → 2026-11-16. Claude
 built it directly at the user's request (no workers).
 
-Work is on branch `friendship-depth`, uncommitted, on top of `main` (`428f2e3`). The automated suite is green; the remaining checks need a person (see Next Steps).
+Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-17): https://nolancasama.github.io/esl-social-life/. The automated suite is green; the remaining checks need a person (see Next Steps).
 
 ## What Exists
 - **Screens, world, people, talk, speech, activities, directions, systems:** as in the first slice: title, profiles, Teacher Setup, creator, Sakura Town plus classroom, café and bedroom, seeded fictional NPCs with schedules, the first-day script, the topic menu, optional on-device speech, catch/soccer, café, lost item, café counter, the directions visitor, calendar, map, journal, messages, local saves.
