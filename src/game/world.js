@@ -48,7 +48,7 @@ export class World {
   get evening() { return this.period === EVENING; }
   weatherOn(day) { return weatherFor(this.cls.seed, day, this.save.weatherOverrides || {}); }
 
-  get ctx() { return { seed: this.cls.seed, weather: (d) => this.weatherOn(d), plans: this.save.plans, npcPlans: this.save.npcPlans || [] }; }
+  get ctx() { return { seed: this.cls.seed, weather: (d) => this.weatherOn(d), plans: this.save.plans, npcPlans: this.save.npcPlans || [], schoolLessons: this.save.flags.fd === 'done' }; }
 
   // ------------------------------------------------------------ people
   npc(id) { return this.byId.get(id) || null; }

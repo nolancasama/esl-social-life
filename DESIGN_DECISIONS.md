@@ -27,6 +27,51 @@ A useful rule:
 
 ---
 
+## 2026-11-19 — School day: music room, gym and art room
+
+- **What:** Three new school rooms (music room, gym, art room; one shared
+  builder in `engine/scenes/schoolrooms.js`). On a weekday whose `TIMETABLE`
+  entry has music, P.E. or arts and crafts, the morning starts in that room
+  (the first such subject in the list wins); other days keep the ordinary
+  classroom morning, and day 0 keeps the authored first-day welcome.
+  NPC schedules show the whole class in that room during the morning.
+  **Why:** The timetable already existed and was only spoken about; using it
+  makes "What do you have today?" true and gives each weekday a different feel
+  without new large environments. **Rejected:** separate lesson periods (would
+  shift the time model) and random room choice (unpredictable for teachers).
+- **What:** The lesson is a short pair activity that reuses existing games:
+  music = the timing/rhythm meter (`playHobby` music), P.E. = catch
+  (`playBall`, now with a `where` scene option), art = the drawing canvas. The
+  teacher says "Today we have ___! Make pairs, please.", the player says "Let's
+  go to the ___ room.", the partner "Let's be partners!" / "OK!" and asks "What
+  do you have today?". It happens inside the existing morning school period and
+  advances time exactly as the classroom desk does; no extra free period.
+  Partners come from a seeded ring over the whole class (`world/school.js`), so
+  each lesson is a different classmate and the class is covered before repeats.
+  **Why:** Pair work introduces classmates the player might not approach and
+  reuses tested activity code. **Rejected:** letting the player pick a partner
+  (would always pick the same friend and turn lessons into XP farming).
+- **What:** Lesson rewards go through the existing fact path with a weekly key
+  (`school-lesson:<week>`), so a partner gets at most +2 XP per week from
+  lessons and it shares the daily fact cap. Lesson memories use `type: 'lesson'`
+  and `focus: []`, so they never count toward Lv3+ gates. The lesson memory is
+  also the once-per-day completion marker; an interrupted lesson pays nothing
+  and can be replayed (no save version change). **Why:** the user asked that
+  lesson memories be capped so pair work can't level up friendships.
+- **What:** "What do you have today?" also appears in casual talk, at most once
+  per school day across all classmates, and only in a chat where no news,
+  offer, plan, quiz or introduction asked the player anything first. Answer
+  cards are built from that day's real timetable (full list, or the first two:
+  "I have P.E. and math."). **Why:** Codex's first wiring asked it at the start
+  of every classmate's first chat each day, which pre-empted hangout reports
+  (caught by `social.test.mjs`) and would repeat the same question all day.
+  **Rejected:** once per classmate per day (too repetitive for Grade 5).
+- **Built by:** Codex (stopped on a usage limit before validation); Claude
+  finished it at the user's request: the casual-question priority above, two
+  test-fixture fixes in `scripts/school.mjs` (dismiss queued HUD cards before
+  pressing ⏩; make the casual-talk check a quiet chat), harness proof and the
+  full-suite run.
+
 ## 2026-11-19 — Visiting a close friend's home
 
 - **What:** Add `friend_house`, the inverse of `home_visit`, at the same Lv4

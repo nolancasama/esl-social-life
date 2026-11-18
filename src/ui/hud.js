@@ -120,6 +120,7 @@ export class HUD {
     const ff = w.npc(w.save.firstFriend), intro = w.npc(w.save.introNpc);
     if (fd === 'start' && ff) return { icon: '💬', en: `Talk to ${ff.name}`, ja: `${ff.name}に話しかけよう`, npc: ff.id };
     if (fd === 'introduced' && intro) return { icon: '💬', en: `Ask ${intro.name} about Saturdays, then invite ${intro.name}!`, ja: `${intro.name}に土曜日のことを聞いて、さそってみよう！`, npc: intro.id };
+    if (w.schoolTime && ['musicroom', 'gym', 'artroom'].includes(this.game.sceneId)) return { icon: '🏫', en: 'Talk to classmates. Start class when you are ready!', ja: 'クラスメートと話そう。準備ができたら授業を始めよう！', target: this.game.scene.interact.find((it) => it.id === 'schoolLesson'), quiet: true };
     const plan = w.upcomingPlans()[0];
     if (plan?.loc === 'friendhouse') {
       const n = w.npc(plan.npcIds[0]);

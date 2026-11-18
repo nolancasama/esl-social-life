@@ -4,6 +4,7 @@
 import { RNG, hashString } from '../core/rng.js';
 import { interest, LOCATIONS, HOME_ACTS, AWAY_ACTS, thirdPerson } from '../data/content.js';
 import { dow, isFreeTime, EVENING } from './time.js';
+import { lessonForDay } from './school.js';
 
 const OUTDOOR = new Set(['park', 'town']);
 
@@ -36,6 +37,10 @@ export function resolveSlot(ctx, npc, day, period) {
 
   const base = npc.schedule[dow(day)][period];
   let slot = { loc: base.loc, act: base.act, with: [...(base.with || [])] };
+  if (period === 0 && !isFreeTime(day, period) && ctx.schoolLessons !== false) {
+    const lesson = lessonForDay(day);
+    if (lesson) slot = { loc: lesson.scene, act: 'school', with: [] };
+  }
   if (period === EVENING || !isFreeTime(day, period)) return slot;
 
   // Occasional variation keeps routines believable but not robotic. Friends

@@ -22,6 +22,7 @@ import { memoryRefs, markReferenced, canOffer, offerEvent, completeEvent, openOf
 import { styleGesture } from '../world/personality.js';
 import { FOODS, petPhrase, listEn } from '../data/content.js';
 import { hangoutToReport } from '../world/social.js';
+import { askToday } from './school.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -73,6 +74,11 @@ export async function talkToNpc(game, actor) {
       await greet(c, actor);
     }
     if (c.ended) return;
+    // Note whether any flow below asks the player something (news, offers,
+    // plans, quizzes); the casual timetable question only fills a quiet chat.
+    let flowAsked = false;
+    const baseAsk = c.ask;
+    c.ask = function (...args) { flowAsked = true; return baseAsk.apply(this, args); };
     // A present someone asked you to bring to this classmate.
     await deliveryHandoff(c, actor);
     const plan = w.planWith(npc.id);
@@ -90,6 +96,14 @@ export async function talkToNpc(game, actor) {
     if (w.level(npc.id) >= 2 && !w.daily.quiz[npc.id] && Math.random() < 0.3) await memoryQuiz(c, actor);
     if (w.isKnown(npc.id) && (w.level(npc.id) >= 2 || w.save.flags.fd === 'done')) await maybeIntroduceFriend(c, actor);
     if (c.ended || c.result) return;
+    c.ask = baseAsk;
+    // "What do you have today?" is a low-priority casual question: once per
+    // school day (any classmate), and only in a chat where nothing else came up.
+    if (!flowAsked && w.day > 0 && !w.weekend && w.save.flags.fd === 'done' && !w.daily.asked.today) {
+      w.daily.asked.today = true;
+      await askToday(c, actor);
+      if (c.ended || c.result) return;
+    }
     await topicLoop(c, actor);
   } finally {
     await c.end();

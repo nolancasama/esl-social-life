@@ -12,6 +12,9 @@ import { buildCafe } from '../engine/scenes/cafe.js';
 import { buildMall } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
 import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
+import { buildMusicRoom, buildGym, buildArtRoom } from '../engine/scenes/schoolrooms.js';
+import { lessonForDay } from '../world/school.js';
+import { runSchoolLesson } from '../activities/school.js';
 import { souvenirMesh } from '../engine/food.js';
 import { DialogueUI } from '../dialogue/ui.js';
 import { talkToNpc } from '../dialogue/talk.js';
@@ -36,7 +39,7 @@ import { recoverInterrupted, snapshot, offerEvent, completeEvent, instance, npcF
 import { runEvent, eventTitle } from '../dialogue/events.js';
 import { confirmTime } from '../dialogue/common.js';
 
-const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse };
+const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom };
 const tmpV = new THREE.Vector3();
 
 export class Game {
@@ -255,7 +258,7 @@ export class Game {
     } else if (w.period === EVENING) {
       await this.enterScene('home', 'bed', { fade: false });
     } else if (w.schoolTime) {
-      await this.enterScene('classroom', 'door', { fade: false });
+      await this.enterSchoolMorning({ fade: false });
     } else if (w.period === AFTERNOON && !w.weekend) {
       await this.enterScene('town', 'schoolGate', { fade: false });
     } else {
@@ -500,6 +503,7 @@ export class Game {
     sfx.click();
     switch (it.kind) {
       case 'door': return this._door(it);
+      case 'schoolLesson': return this.schoolLesson();
       case 'friendhouse': return this._friendHouseDoor();
       case 'mallShop': return this.activities.mallShop(it);
       case 'mallFood': return this.activities.mallCounter(it);
@@ -545,6 +549,7 @@ export class Game {
 
   async _door(it) {
     const w = this.world;
+    if (w.schoolTime && ['musicroom', 'gym', 'artroom'].includes(this.sceneId)) return this.schoolLesson();
     if (this.sceneId === 'classroom' && w.schoolTime) {
       this.hud.toast({ icon: '🔔', en: 'Class starts soon! Talk to classmates, then sit at your desk.', ja: 'もうすぐ授業！話したら、席にすわろう。' });
       return;
@@ -598,6 +603,16 @@ export class Game {
     await this.advanceTime({ reason: 'class', subjects: subs });
   }
 
+  // The tutorial includes the next-morning callback; keep that whole script
+  // in homeroom until it finishes, including when loading an older save.
+  async enterSchoolMorning({ fade = false } = {}) {
+    const w = this.world;
+    const lesson = w.save.flags.fd === 'done' ? lessonForDay(w.day) : null;
+    await this.enterScene(lesson?.scene || 'classroom', 'door', { fade });
+  }
+
+  schoolLesson() { return runSchoolLesson(this); }
+
   async _bed() {
     const w = this.world;
     if (w.evening) {
@@ -620,6 +635,7 @@ export class Game {
       return this._bed();
     }
     if (w.schoolTime) {
+      if (['musicroom', 'gym', 'artroom'].includes(this.sceneId)) return this.schoolLesson();
       if (this.sceneId === 'classroom') return this._desk();
       return;
     }
@@ -711,7 +727,7 @@ export class Game {
     this.dialogue.close();
     this.camera.release();
     await this.hud.transition({ icon: '🏫', title: 'To school!', sub: 'Have a great day!', ja: 'いってきます！', ms: 1100 });
-    await this.enterScene('classroom', 'door', { fade: false });
+    await this.enterSchoolMorning({ fade: false });
     this.setMode('explore');
     this.hud.refresh();
   }

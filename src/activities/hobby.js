@@ -34,12 +34,15 @@ function sline(npc, key, name) {
 /** Seat or stand the player and friend for a variant; returns the friend's actor. */
 async function stage(game, actor, where) {
   const w = game.world;
-  const needScene = where === 'friendhouse' ? 'friendhouse' : where === 'cafe' ? 'cafe' : 'town';
+  const schoolRoom = where === 'musicroom' || where === 'artroom';
+  const needScene = schoolRoom ? where : where === 'friendhouse' ? 'friendhouse' : where === 'cafe' ? 'cafe' : 'town';
   if (game.sceneId !== needScene) await game.enterScene(needScene, needScene === 'cafe' ? 'door' : 'park');
   const scene = game.scene;
   const P0 = game.player;
   let pA, pB, sit = false;
-  if (where === 'friendhouse') {
+  if (schoolRoom) {
+    [pA, pB] = scene.activitySeats;
+  } else if (where === 'friendhouse') {
     [pA, pB] = scene.activitySeats; sit = true;
   } else if (where === 'cafe') {
     pA = scene.seats.find((s) => s.id === 'T2-0'); pB = scene.seats.find((s) => s.id === 'T2-1'); sit = true;
@@ -59,7 +62,10 @@ async function stage(game, actor, where) {
     if (sit) { P0.char.setBase('sit', { height: pA.seatY }); a.char.setBase('sit', { height: pB.seatY }); }
     else { a.char.setBase('idle'); }
     const mx = (pA.x + pB.x) / 2, mz = (pA.z + pB.z) / 2;
-    if (where === 'field') {
+    if (schoolRoom) {
+      game.camera.configure(scene.camera, P0.char, scene.collision);
+      game.camera.release();
+    } else if (where === 'field') {
       game.camera.shot(new THREE.Vector3(pA.x + 0.4, 3.3, pA.z + 5.4), new THREE.Vector3(mx - 0.9, 0.5, mz - 0.6), 5);
     } else {
       const yaw = where === 'bench' ? pA.yaw : (pA.yaw + pB.yaw) / 2 + Math.PI / 2;
@@ -157,10 +163,10 @@ function sketchbook(game, names) {
   return { draw, photo, close: () => wrap.remove() };
 }
 
-async function playDraw(game, actor, { project = null }) {
+async function playDraw(game, actor, { project = null, where: sceneOption = null }) {
   const w = game.world;
   const name = w.save.player.name;
-  const where = game.sceneId === 'friendhouse' ? 'friendhouse' : game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'bench';
+  const where = sceneOption || (game.sceneId === 'friendhouse' ? 'friendhouse' : game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'bench');
   const { a, sit } = await stage(game, actor, where);
   const npc = a.npc;
   a.char.setProp('sketch');
@@ -391,11 +397,11 @@ async function rhythm(game, a, { beats = 8, title, gesture }) {
   return results.filter(Boolean).length;
 }
 
-async function playMusic(game, actor, { like, practice = false }) {
+async function playMusic(game, actor, { like, practice = false, where: sceneOption = null }) {
   const w = game.world;
   const name = w.save.player.name;
   const m = MUSIC[like] || MUSIC.music;
-  const where = game.sceneId === 'friendhouse' ? 'friendhouse' : game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'field';
+  const where = sceneOption || (game.sceneId === 'friendhouse' ? 'friendhouse' : game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'field');
   const { a, sit } = await stage(game, actor, where);
   const npc = a.npc;
   const c = new Conversation(game, [a]);
@@ -512,10 +518,10 @@ async function playBallPractice(game, actor, { soccer }) {
  * like: the interest behind it; practice: help the friend get better;
  * project: { recipient } for a card.
  */
-export function playHobby(game, actors, { variant, like = null, practice = false, project = null, soccer = false } = {}) {
+export function playHobby(game, actors, { variant, like = null, practice = false, project = null, soccer = false, where = null } = {}) {
   const actor = actors[0];
-  if (variant === 'draw') return playDraw(game, actor, { project });
+  if (variant === 'draw') return playDraw(game, actor, { project, where });
   if (variant === 'spot') return playSpot(game, actor, { like });
-  if (variant === 'music') return playMusic(game, actor, { like, practice });
+  if (variant === 'music') return playMusic(game, actor, { like, practice, where });
   return playBallPractice(game, actor, { soccer });
 }

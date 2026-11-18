@@ -33,10 +33,10 @@ function makeRing(color = '#FFD43B', r = 0.6) {
   return m;
 }
 
-export async function playBall(game, actors, { soccer = false } = {}) {
+export async function playBall(game, actors, { soccer = false, where = 'town' } = {}) {
   const w = game.world;
-  if (game.sceneId !== 'town') {
-    await game.enterScene('town', 'park');
+  if (game.sceneId !== where) {
+    await game.enterScene(where, where === 'town' ? 'park' : 'door');
     actors = actors.map((a) => game.npcs.actorFor(a.npc.id)).filter(Boolean);
   }
   const scene = game.scene;

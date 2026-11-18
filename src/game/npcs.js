@@ -80,7 +80,8 @@ export class NpcManager {
     this.usedGroups = new Set();
     const present = [];
     for (const n of w.npcs) {
-      const slot = w.slot(n);
+      const inSchoolRoom = w.schoolTime && ['musicroom', 'gym', 'artroom'].includes(sceneId);
+      const slot = inSchoolRoom ? { loc: sceneId, act: 'school', with: [] } : w.slot(n);
       const L = LOCATIONS[slot.loc];
       if (!L || L.scene !== sceneId) continue;
       present.push({ n, slot, zone: zoneFor(slot.loc) });
@@ -95,7 +96,7 @@ export class NpcManager {
       const heading = headingBetween(visitor.start, next);
       this._spawn({ npc: VISITORS.find((v) => v.id === visitor.visitorId), special: 'visitor', adult: true }, p.x - Math.cos(heading) * 1.2, p.z + Math.sin(heading) * 1.2, heading, 'stand');
     }
-    if (sceneId === 'classroom' && w.schoolTime) {
+    if (['classroom', 'musicroom', 'gym', 'artroom'].includes(sceneId) && w.schoolTime) {
       const t = scene.teacherSpot;
       this._spawn({ npc: TEACHER, special: 'teacher', adult: true }, t.x, t.z, t.yaw, 'stand');
     }

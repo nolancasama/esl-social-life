@@ -1,10 +1,7 @@
 # Current State
 
 ## Status (2026-11-19)
-School-life expansion in progress on branch `school-life-expansion`. Part 1, Niji Mall
-(shops, food court, mall outings, save v3), is committed as `d078832`; see
-DESIGN_DECISIONS.md 2026-11-17. Part 2, visiting a friend's home, is implemented
-without a new save version; see the 2026-11-19 decision entry. Parts 3-4 are next.
+School-life expansion in progress on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, is committed after it (see DESIGN_DECISIONS.md 2026-11-19). Part 4, music, is next.
 
 The Friendship Depth expansion (SPEC.md Part 2) is built: all three phases.
 Phase 1 covers behaviour styles, data-driven friendship events, level-dependent
@@ -16,6 +13,7 @@ built it directly at the user's request (no workers).
 Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-17): https://nolancasama.github.io/esl-social-life/. The automated suite is green; the remaining checks need a person (see Next Steps).
 
 ## What Exists
+- **School day (2026-11-19):** music room, gym and art room. On weekdays whose timetable has music, P.E. or arts and crafts, the morning starts in that room; the teacher introduces the lesson, a rotating partner (seeded ring over the whole class) does a short pair activity (rhythm meter, catch, drawing canvas), then time advances like the classroom desk. Lesson XP is at most +2 per partner per week through the fact cap; lesson memories never open level gates. "What do you have today?" also appears once per school day in a quiet casual chat, answered from the real timetable. `e2e:school` covers it; perf includes the three rooms.
 - **Visiting a friend's home (2026-11-19):** Lv4+ friends invite by message or
   in person, or the player asks “Can I come to your house?” in the topic menu.
   The existing event cards handle acceptance, another day and decline; real
@@ -99,17 +97,21 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - Characters walk in straight lines; soft approaches are skipped when the walk is not clear. No pathfinding.
 - Several e2e scripts use debug hooks to reach late-game content quickly; the journey script plays the natural path.
 - Bubbles over characters are English only; the Japanese hint appears once you talk.
-- Not built yet in this expansion: specialist classrooms and the school day,
-  music (queued, see Next Steps).
+- Not built yet in this expansion: music (queued, see Next Steps).
+- **Open design question (asked the user 2026-11-19):** every weekday in `TIMETABLE` has music, P.E. or arts, so after day 0 every weekday morning is a specialist lesson and the ordinary classroom morning (homeroom desk) no longer occurs on weekdays.
+- `e2e:friendship` is occasionally flaky: in section H the best friend can start the random lost-ball favour instead of the milestone (seen once in 3 runs on 2026-11-19; not caused by the school work).
+- School rooms (perf: 118-119 of 150 draw calls each): classmates stand in loose spots around the room during the lesson; in the gym the teacher stands behind the catch partner. Fine for now; polish if playtests show it matters.
 
 ## Next Steps
 1. Play on a classroom Chromebook: frame rate with groups and visits, touch on the composer cards, read-aloud quality.
 2. Playtest pacing: how many days to Lv3, Lv4 and Lv5 with one-on-one memories; whether 2 event offers a day feels right; whether soft approaches feel welcome rather than intrusive.
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
-4. School-life expansion (user asked for all four, 2026-11-17), in this order on branch `school-life-expansion`: Niji Mall (done, `d078832`), visiting a friend's home (done), then:
+4. School-life expansion (user asked for all four, 2026-11-17), in this order on branch `school-life-expansion`: Niji Mall (done, `d078832`), visiting a friend's home (done, `e0274e1`), school day (done), then:
    - **Part 3, school day and specialist classrooms:** a music room, gym and art room. On days the timetable has music, P.E. or art, the morning lesson happens in that room as a short pair activity with a different classmate each time (music: rhythm game; P.E.: ball play; art: drawing canvas). New lines such as "What do you have today?" / "I have P.E. and math." Lesson memories are capped so pair work cannot level up friendships.
    - **Part 4, music:** gentle background music generated in the browser (no audio files), a different loop per place; pauses while the mic is listening and ducks during read-aloud; a music volume setting plus a default in Teacher Setup.
    Each part has its own e2e script and a full-suite run before the next starts.
 
 ## Codex / Delegated Work
+Part 3 was built by Codex (stopped on a usage limit before validation) and finished by Claude at the user's request: casual-question priority fix, two e2e fixture fixes, harness proof (known-good pass; a deliberately broken intro line failed with exit 1, reverted), full suite rerun. No pending worker output.
+
 Niji Mall was built by Codex and reviewed by Claude (diff, screenshots, full suite rerun by Claude), then committed as `d078832`. The hangout-report priority rule was a direct Claude edit. Codex implemented the friend's-home part (run timed out during final validation); Claude reviewed the diff, made the cat model read as a cat (pointed ears, whiskers, upright tail instead of a curled shiba tail), reran the full suite (unit + 9 e2e suites, all PASS, perf friendhouse 13/90 draw calls) and committed it. No pending worker output.

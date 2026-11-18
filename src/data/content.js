@@ -291,6 +291,9 @@ export const LEVEL_NAMES = [
 // NPC locations. `scene` is the 3D scene that shows them; null = off-screen.
 export const LOCATIONS = {
   classroom: { en: 'Classroom 5-1', ja: '5年1組', the: 'the classroom', scene: 'classroom', emoji: '🏫' },
+  musicroom: { en: 'Music Room', ja: '音楽室', the: 'the music room', scene: 'musicroom', emoji: '🎵' },
+  gym: { en: 'Gym', ja: '体育館', the: 'the gym', scene: 'gym', emoji: '🏀' },
+  artroom: { en: 'Art Room', ja: '図工室', the: 'the art room', scene: 'artroom', emoji: '🎨' },
   park: { en: 'Sakura Park', ja: 'さくら公園', the: 'the park', scene: 'town', zone: 'park', emoji: '🌸', outdoor: true },
   cafe: { en: 'Café Komorebi', ja: 'カフェ・こもれび', the: 'the café', scene: 'cafe', emoji: '☕' },
   town: { en: 'Sakura Town', ja: 'さくら町', the: 'town', scene: 'town', zone: 'street', emoji: '🏘️', outdoor: true },

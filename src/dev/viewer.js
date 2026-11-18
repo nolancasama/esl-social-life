@@ -1,4 +1,4 @@
-// Dev-only scene viewer: /?view=town|classroom|cafe|mall|home|friendhouse[&cam=x,y,z,lx,ly,lz]
+// Dev-only scene viewer: /?view=town|classroom|musicroom|gym|artroom|cafe|mall|home|friendhouse[&cam=x,y,z,lx,ly,lz]
 // Renders a scene with a few sample characters so visuals can be checked in
 // isolation (used by scripts/shots.mjs).
 
@@ -11,6 +11,7 @@ import { buildCafe } from '../engine/scenes/cafe.js';
 import { buildMall } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
 import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
+import { buildMusicRoom, buildGym, buildArtRoom } from '../engine/scenes/schoolrooms.js';
 import { buildClass } from '../world/generator.js';
 import { DEFAULT_ROSTER } from '../data/roster.js';
 
@@ -18,7 +19,7 @@ export function runViewer(which, params) {
   const stage = document.getElementById('stage');
   const r = new Renderer(stage);
   const npcs = buildClass(DEFAULT_ROSTER, 'viewer');
-  const builders = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse };
+  const builders = { town: buildTown, classroom: buildClassroom, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse };
   const host = npcs[Number(params.get('friend') || 0)] || npcs[0];
   const scene = (builders[which] || buildTown)({ playerName: 'Ken', seed: 'viewer', npc: host });
   const period = Number(params.get('period') || 0);
