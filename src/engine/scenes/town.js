@@ -100,13 +100,13 @@ export function buildTown({ shadows = false, playerName = '' } = {}) {
   school.collideBox(-32.6, -16, 4.2, 0.3, 0, 1.6);
   interact.push({ id: 'schoolDoor', x: SX, z: -21.6, r: 1.8, kind: 'door', to: 'classroom', icon: '🏫', label: { en: 'School', ja: '学校' } });
 
-  // ---------------------------------------------------------------- mall (NE, opening soon)
+  // ---------------------------------------------------------------- mall (NE)
   mall.flat(34, 10.5, '#EDE6DA', 24, 0.016, -11.75);
   block(mall, 25, -26, 28, 18, 9, '#FDF6EC', { trim: '#E6DCCB' });
   const rainbow = ['#FF6B6B', '#FFA94D', '#FFD43B', '#69DB7C', '#4DABF7', '#9775FA'];
   rainbow.forEach((c, i) => mall.box(28.1, 0.26, 0.1, c, 25, 7.05 + i * 0.26, -16.97));
-  mall.box(8, 3.4, 0.12, '#9AA7B5', 25, 0, -16.96);
-  for (let x = 21.2; x <= 28.8; x += 0.5) mall.box(0.06, 3.3, 0.14, '#7F8B99', x, 0.05, -16.93);
+  mall.box(8, 3.4, 0.12, '#BCE8EC', 25, 0, -16.96);
+  for (const x of [21.1, 25, 28.9]) mall.box(0.08, 3.3, 0.14, '#FFFFFF', x, 0.05, -16.93);
   for (const x of [13.5, 17, 33, 36.5]) { mall.box(2.6, 2.2, 0.1, PAL.glass, x, 1.0, -16.96); mall.box(2.7, 0.12, 0.15, '#FFFFFF', x, 0.95, -16.93); }
   for (const x of [12, 18, 32, 38]) { mall.box(2.2, 0.5, 1.0, '#C9B79C', x, 0, -9.5, { collide: true }); bush(mall, x, -9.5, 1.1, PAL.leaf); }
   const mb1 = bench(mall, 15, -12.5, 0);
@@ -118,7 +118,7 @@ export function buildTown({ shadows = false, playerName = '' } = {}) {
   mall.box(0.12, 2.3, 0.12, PAL.woodDark, 6.4, 0, -7.2);
   mall.box(0.12, 2.3, 0.12, PAL.woodDark, 8.9, 0, -7.2);
   mall.box(2.8, 1.5, 0.14, PAL.wood, 7.65, 0.95, -7.2, { collide: true });
-  interact.push({ id: 'mallDoor', x: 25, z: -15.6, r: 2.4, kind: 'mall', icon: '🛍️', label: { en: 'Niji Mall', ja: 'にじモール' } });
+  interact.push({ id: 'mallDoor', x: 25, z: -15.6, r: 2.4, kind: 'door', to: 'mall', icon: '🛍️', label: { en: 'Niji Mall', ja: 'にじモール' } });
   interact.push({ id: 'infoBoard', x: 7.65, z: -6.3, r: 1.6, kind: 'board', icon: '🗾', label: { en: 'Town board', ja: '町のけいじばん' } });
 
   // ---------------------------------------------------------------- park (SE)
@@ -302,7 +302,7 @@ export function buildTown({ shadows = false, playerName = '' } = {}) {
     textPlane(3.6, 0.9, { bg: '#FFFFFF', lines: [{ text: 'さくら小学校  SAKURA ELEMENTARY', size: 70, color: '#2E3440' }] }, SX, 3.45, -22.88),
     textPlane(2.6, 0.75, { bg: '#F7F1E3', lines: [{ text: 'さくら小学校', size: 96, color: '#3E2F23' }] }, -26.5, 1.25, -5.84),
     textPlane(9, 1.5, { lines: [{ text: 'NIJI MALL', size: 170, color: '#5C7CFA' }] }, 25, 5.4, -16.88),
-    textPlane(6, 0.9, { bg: '#FFD43B', radius: 40, lines: [{ text: 'OPENING SOON!  もうすぐオープン!', size: 92, color: '#7A3E00' }] }, 25, 3.9, -16.85),
+    textPlane(6, 0.9, { bg: '#FFD43B', radius: 40, lines: [{ text: 'WELCOME!  いらっしゃいませ!', size: 92, color: '#7A3E00' }] }, 25, 3.9, -16.85),
     textPlane(5, 1.0, { bg: '#2F9E6E', radius: 30, lines: [{ text: 'Café Komorebi  ☕', size: 120, color: '#FFFFFF' }] }, CX, 3.55, 8.9, Math.PI),
     textPlane(2.8, 0.82, { bg: '#FFF6E6', lines: [{ text: 'さくら公園  SAKURA PARK', size: 78, color: '#C2185B' }] }, 8, 1.25, 5.74, Math.PI),
     textPlane(2.6, 1.3, { bg: '#FFFDF6', lines: [{ text: "Let's go!  行ってみよう!", size: 64, color: '#2B3A55', y: 0.25 }, { text: '🦕 🐬 🐧 🦌 ⛩️ 🗼', size: 96, y: 0.68 }] }, 7.65, 1.7, -7.12),
@@ -402,6 +402,7 @@ export function buildTown({ shadows = false, playerName = '' } = {}) {
     schoolGate: { x: -23.4, z: -8.6, yaw: 0 },
     schoolDoor: { x: SX, z: -19.8, yaw: 0 },
     cafeDoor: { x: CX, z: 6.2, yaw: Math.PI },
+    mallDoor: { x: 25, z: -13.7, yaw: 0 },
     homeDoor: { x: -22.0, z: H.door[1], yaw: Math.PI / 2 },
     park: { x: 11.5, z: 14.2, yaw: Math.PI / 4 },
     crossroads: { x: 0, z: 1, yaw: Math.PI },

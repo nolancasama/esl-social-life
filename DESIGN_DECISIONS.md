@@ -27,6 +27,109 @@ A useful rule:
 
 ---
 
+## 2026-11-17 — Hangout news before ordinary memory recalls
+
+- **What:** A completed, unreported NPC hangout defers the greeting's ordinary
+  memory recall until a later conversation. The existing friendship-event flow
+  tells the news and offers “Can I come next time?”; existing open event offers
+  and the scripted first-day callback keep their priority.
+  **Why:** A recall could otherwise start another outing and end the conversation
+  before the friend reported the hangout. Its memory remains unreferenced, so it
+  can still be recalled later. This ordering defect existed before the mall diff.
+  **Rejected:** Hiding the competing memory in tests or consuming it without
+  telling it, changing event XP, or changing level gates.
+- **What:** Place explicit NPC hangout pairs before routine companion groups
+  and lost-item searches, after plans with the player. Both friends reserve
+  their group space together at the planned venue, including the mall.
+  **Why:** One-sided routine companion links could absorb one member into a
+  different four-person group, or a park search could place one member alone.
+  The resolved hangout already overrides both friends' free routines; placement
+  must respect that same pair rather than treating it as an ordinary routine.
+- **What (2026-11-18):** When a friend has several hangouts to report, the one
+  that came from the player introducing them is told first, then the oldest;
+  the rest follow on later talks.
+  **Why:** The introduction report carries "Thank you for introducing us!",
+  which is the payoff for the player's introduction. With the mall adding more
+  hangouts, a friend often had two to report, and the payoff was lost.
+  **Rejected:** Newest first (the introduction payoff could still be skipped);
+  reporting all of them in one conversation (too long for Grade 5 readers).
+
+## 2026-11-17 — Niji Mall and food court
+
+- **What:** Open the existing Niji Mall town door into a separate, bright indoor
+  cutaway scene, with an entrance planter and directory, three pocket shops
+  (toys/games, books/stationery, sports/clothes), and ramen, burger, sushi and
+  crepe/ice-cream counters surrounding four tables with four seats each. Leaving
+  returns to the pavement outside the same town door. The map and weekend goal
+  cards now lead there. Register the scene in the dev viewer.
+  **Why:** The existing landmark becomes a useful outing destination while
+  keeping the familiar dollhouse layout and short walking distances for Grade 5
+  learners on 1366×768 Chromebooks. Fixtures, merchandise and three shopkeepers
+  are merged static geometry; signs use the existing common helpers.
+  **Rejected:** A large multi-floor shopping centre, external brand names,
+  separate scenes per shop, or animated shopkeepers adding character draw calls.
+- **What:** Each shop offers three fixed items at round ¥100 prices. Cards model
+  “Can I see ___, please?” → “How much is it?” → “It's ___ yen.” → “I'll take it!”
+  or “No, thank you.” → “Thank you!” A saved wallet starts with ¥1,000 and grants
+  another ¥1,000 once per elapsed in-game week, with unspent money carried over.
+  Checks deduct only when the full price is available; no borrowing. Old saves
+  start with the current week's allowance, without retrospective backpay.
+  **Why:** A simple weekly limit makes number practice meaningful without
+  connection penalties, grinding, or a real-money store. Shopping takes no time
+  and awards no XP. A rejected purchase ends with a reassuring choice.
+  **Rejected:** Negative balances, daily refills, randomized prices, spending
+  friendship XP, or charging for food that the existing café serves freely.
+- **What:** Purchases use the existing souvenir save/shelf system, with small
+  toy, book, stationery, ball and clothing models. A purchase is moved to the
+  front of the shelf list so it remains visible when the twelve display slots
+  are full. Repeated item kinds reuse that display slot. The existing present
+  and delivery events retain their own objects and rewards.
+  **Why:** Bedroom keepsakes make a purchase tangible without inventing a new
+  inventory, gift economy, or replacing an outstanding delivery.
+  **Rejected:** Extra XP for buying gifts, silently completing existing delivery
+  events, or storing possessions in a separate inventory UI.
+- **What:** Food ordering follows the café's conversation/card pattern with
+  “What do you want to eat?”, “I want ___.”, “I'd like ___, please.” and “Here
+  you are.” Solo orders are quick, free and create no friendship memory. Mall
+  outings visit the relevant food counters first; friends order their generated
+  food likes, and a player who knows a favorite can order for that friend. The
+  existing foods remain available alongside ramen, sushi and crepes, so no
+  friend is assigned an invented favorite. Everyone then sits at table T2, eats
+  and takes a memory photo; the closing cards offer one optional shop together
+  or goodbye. Every new line/card has a readable Japanese hint and every new
+  conversation ends in a choice; optional speech uses the same card intents.
+  **Why:** Counter service fits a food court and keeps all companions involved.
+  **Rejected:** Reusing the café's hard-coded waiter walking routes, auto-buying
+  during outings, or forcing a shopping stop.
+- **What:** Add mall to phone planning, in-person/nearby invitations, friend
+  messages and NPC–NPC hangouts. Keep all existing XP values, level gates and
+  event reward paths: group completion uses `completeEvent` (6 XP per friend,
+  existing first-activity bonus, `focus: []`); one-on-one outings use the existing
+  personal-memory path. Mall memories support real recalls and repeat plans.
+  Indoor NPC pairs choose café/mall from an independent deterministic pair seed;
+  stored plans keep their venue. The existing group e2e's scene resolver now
+  understands mall as an indoor venue without changing its assertions.
+  **Why:** The mall should participate in the same social world as the café.
+  **Rejected:** New reward values, group memories opening level gates, or any
+  connection loss for declining or lacking money.
+- **What:** Add an independently hashed Saturday-morning or Sunday-afternoon
+  mall slot to some newly generated NPC schedules, only when the slot has no
+  companions or away appointment. Keep stored schedules, Saturday-afternoon
+  signature activities, and the old generation RNG stream. Shopping mall slots
+  are stable across weekly variation and rain; player plans still override them.
+  **Why:** Populate the destination predictably without reshuffling saved
+  classmates. **Rejected:** Regenerating existing schedules or consuming the
+  established schedule RNG for the added slot.
+- **What:** Save version 3 adds `pocketMoney: { balance, week }` through an
+  idempotent migration, preserving v1/v2 levels, XP, facts, memories and plans.
+  Pure tests cover prices, overspending, allowance rollover, migration and
+  schedule determinism. `e2e:mall` exercises the real town entrance, purchase,
+  solo order, two-friend phone plan, meal, exit and bedroom shelf; prove the
+  harness with a reverted broken selector. Add mall to the existing performance
+  script with the café's unchanged 90-call budget, and store visual evidence in
+  an external `SHOTS_DIR`. **Why:** Money and scene integration need observable
+  regression protection without changing existing test thresholds.
+
 ## 2026-11-10 — Review of the original brief (SPEC.md) and what changed
 
 The brief was accepted as the product direction. Built as the first vertical

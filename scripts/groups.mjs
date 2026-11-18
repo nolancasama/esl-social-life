@@ -5,6 +5,8 @@
 // became friends meeting up on their own and telling you about it.
 // Run: npm run e2e:groups
 import { launch, harness } from './lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
 
 const base = process.env.BASE || 'http://localhost:5173';
 const out = process.env.SHOTS_DIR || '.shots/groups';
@@ -26,13 +28,20 @@ await settle();
 const cast = await ev(async () => {
   const g = window.__esl, w = g.world;
   const O = await import('/src/dialogue/outing.js');
-  // The composer offers the next three free slots after now.
-  const slots = [];
-  for (let d = w.day; d < w.day + 8 && slots.length < 3; d++) for (const p of [0, 1]) { if (d === w.day && p <= w.period) continue; if (slots.length < 3 && ((p === 1) || d % 7 >= 5)) slots.push({ day: d, period: p }); }
-  let busy = null, slotIdx = -1;
-  for (const [i, s] of slots.entries()) { const n = w.npcs.find((x) => O.busyReason(w, x, s.day, s.period)); if (n) { busy = n.id; slotIdx = i; break; } }
-  const free = w.npcs.filter((n) => n.id !== busy && slots.every((s) => !O.busyReason(w, n, s.day, s.period))).map((n) => n.id);
-  return { busy, slotIdx, slots, a: free[0], b: free[1], c: free[2], p: free[3], q: free[4] };
+  // Generated routines need not include an away appointment in the first
+  // three composer slots. Find a real calendar window that exercises declining.
+  const firstDay = w.day, period = w.period;
+  for (let day = firstDay; day < firstDay + 7; day++) {
+    const slots = [];
+    for (let d = day; d < day + 8 && slots.length < 3; d++) for (const p of [0, 1]) { if (d === day && p <= period) continue; if (slots.length < 3 && ((p === 1) || d % 7 >= 5)) slots.push({ day: d, period: p }); }
+    let busy = null, slotIdx = -1;
+    for (const [i, s] of slots.entries()) { const n = w.npcs.find((x) => O.busyReason(w, x, s.day, s.period)); if (n) { busy = n.id; slotIdx = i; break; } }
+    const free = w.npcs.filter((n) => n.id !== busy && slots.every((s) => !O.busyReason(w, n, s.day, s.period))).map((n) => n.id);
+    if (!busy || free.length < 5) continue;
+    w.save.time = { day, period }; w.ensureDaily();
+    return { busy, slotIdx, slots, a: free[0], b: free[1], c: free[2], p: free[3], q: free[4] };
+  }
+  throw new Error('No real calendar window has a busy classmate and five free friends');
 });
 log('cast', cast);
 expect(cast.busy && cast.a && cast.b && cast.c, 'found a classmate who is busy at an upcoming slot, and three who are free');
@@ -78,7 +87,7 @@ async function goTo(plan) {
     const g = window.__esl, w = g.world;
     w.save.time = { day: plan.day, period: plan.period };
     w.ensureDaily();
-    await g.enterScene(plan.loc === 'cafe' ? 'cafe' : 'town', plan.loc === 'cafe' ? 'door' : 'park');
+    await g.enterScene(['cafe', 'mall'].includes(plan.loc) ? plan.loc : 'town', ['cafe', 'mall'].includes(plan.loc) ? 'door' : 'park');
   }, plan);
   await settle();
 }
@@ -128,19 +137,61 @@ expect(memB && memB.n === 3, 'the café outing remembered all three friends');
 
 // ---------------------------------------------------------------- E. classmates who became friends meet up on their own
 log('— E. NPC–NPC hangout');
-const hang = await ev(({ p, q }) => {
+const introduction = await ev(async ({ p, q }) => {
   const g = window.__esl, w = g.world;
-  let pair = [p, q];
-  if (w.link(p, q) > 0) pair = (() => { for (const x of w.npcs) for (const y of w.npcs) if (x.id < y.id && w.link(x.id, y.id) === 0) return [x.id, y.id]; return null; })();
-  if (!pair) return null;
-  w.connect(pair[0], pair[1], 1, 'intro');
-  const h = w.save.npcPlans.find((x) => x.pair === [...pair].sort().join('|') && x.status === 'pending');
-  return h ? { ...h } : null;
+  const { npcFree } = await import('/src/world/friendship.js');
+  const { DAILY_HANGOUTS, scheduleHangout } = await import('/src/world/social.js');
+  const { World } = await import('/src/game/world.js');
+  const { dow, isFreeTime } = await import('/src/world/time.js');
+  const before = { cls: structuredClone(w.cls), save: structuredClone(w.save) };
+  const pairs = w.link(p, q) === 0 ? [[p, q]] : [];
+  for (const x of w.npcs) for (const y of w.npcs) {
+    if (x.id < y.id && w.link(x.id, y.id) === 0 && !pairs.some((pair) => pair.includes(x.id) && pair.includes(y.id))) pairs.push([x.id, y.id]);
+  }
+  const attempts = [];
+  for (const pair of pairs) {
+    // Outings have changed the calendar since the cast was chosen. Ask the
+    // actual planner on an isolated save; never insert a probe into live play.
+    const probe = new World(w.cls, structuredClone(w.save));
+    const proposed = scheduleHangout(probe, ...pair, { source: 'intro' });
+    const candidates = [];
+    for (let day = w.day + 1; day <= w.day + 4; day++) for (const period of [0, 1]) {
+      const reasons = [];
+      if (!isFreeTime(day, period)) reasons.push('school');
+      if (w.save.npcPlans.filter((h) => h.status === 'pending' && h.day === day).length >= DAILY_HANGOUTS) reasons.push('daily cap');
+      const friends = pair.map((id) => {
+        const base = w.npc(id).schedule[dow(day)][period];
+        const plans = w.save.plans.filter((h) => h.status === 'pending' && h.day === day && h.period === period && h.npcIds.includes(id));
+        const hangouts = w.save.npcPlans.filter((h) => h.status === 'pending' && h.day === day && h.period === period && (h.a === id || h.b === id));
+        if (plans.length) reasons.push(`${id}: player plan`);
+        if (hangouts.length) reasons.push(`${id}: NPC hangout`);
+        if (base.act.startsWith('away:')) reasons.push(`${id}: ${base.act}`);
+        return { id, base, free: npcFree(w, id, day, period), plans, hangouts };
+      });
+      candidates.push({ day, period, reasons, friends });
+    }
+    attempts.push({ pair, proposed, candidates });
+    if (!proposed) continue;
+    w.connect(pair[0], pair[1], 1, 'intro');
+    const h = w.save.npcPlans.find((x) => x.pair === [...pair].sort().join('|') && x.status === 'pending');
+    return { hang: h ? { ...h } : null, day: w.day, attempts, before };
+  }
+  return { hang: null, reason: 'no schedulable unlinked pair', day: w.day, attempts, before };
 }, cast);
+fs.writeFileSync(path.join(out, 'introduction-state.json'), JSON.stringify(introduction, null, 2));
+log('introduction candidates', JSON.stringify({ ...introduction, before: undefined }));
+const hang = introduction.hang;
 log('hangout', hang);
 expect(!!hang, 'an introduction led to a planned hangout');
 if (hang) {
   await goTo({ day: hang.day, period: hang.period, loc: hang.loc });
+  log('hangout placement', JSON.stringify(await ev((h) => {
+    const g = window.__esl, w = g.world;
+    return { scene: g.sceneId, lost: w.daily.lost, lostDone: w.daily.lostDone, friends: [h.a, h.b].map((id) => {
+      const a = g.npcs.actorFor(id);
+      return { id, slot: w.slot(w.npc(id)), mode: a?.mode, home: a?.home, position: a ? { x: a.char.root.position.x, z: a.char.root.position.z } : null };
+    }) };
+  }, hang)));
   const together = await ev((h) => {
     const g = window.__esl;
     const A = g.npcs.actorFor(h.a), B = g.npcs.actorFor(h.b);
@@ -154,18 +205,40 @@ if (hang) {
     await sleep(800);
     await shot('hangout-together');
   }
-  // Next day: one of them tells you about it.
-  await ev(async (h) => {
+  // Afterwards, talk when the friend is not attending another meetup. The
+  // next afternoon may already belong to a different NPC hangout (also at the mall).
+  const reportVisit = await ev(async (h) => {
+    const w = window.__esl.world;
+    const { LOCATIONS } = await import('/src/data/content.js');
+    for (let day = h.day + 1; day <= h.day + 3; day++) for (const period of [0, 1]) {
+      for (const id of [h.a, h.b]) {
+        const slot = w.slot(w.npc(id), day, period);
+        const scene = LOCATIONS[slot.loc]?.scene;
+        if (scene && !slot.hangout && !w.planWith(id, day, period) && !slot.act.startsWith('away:')) return { id, day, period, loc: slot.loc, scene };
+      }
+    }
+    return null;
+  }, hang);
+  expect(!!reportVisit, 'a friend has an available reporting slot within the report window');
+  if (!reportVisit) throw new Error('No available friend to report the hangout');
+  log('report visit', reportVisit);
+  await ev(async (visit) => {
     const g = window.__esl, w = g.world;
-    w.save.time = { day: h.day + 1, period: 1 };
+    w.save.time = { day: visit.day, period: visit.period };
     w.ensureDaily();
     const { settleHangouts } = await import('/src/world/social.js');
     settleHangouts(w.save, w.day, w.period);
-    await g.enterScene('town', 'park');
-  }, hang);
+    await g.enterScene(visit.scene, visit.scene === 'town' ? 'park' : 'door');
+  }, reportVisit);
   await settle();
   let report = '';
-  await ev((h) => { const g = window.__esl; const w = g.world; const a = g.npcs.ensure(w.npc(h.a), g.player.x + 1.2, g.player.z, 0); g.talkTo(a); }, hang);
+  log('before report', JSON.stringify(await ev(async (h) => {
+    const w = window.__esl.world;
+    const F = await import('/src/world/friendship.js');
+    const S = await import('/src/world/social.js');
+    return { day: w.day, hangout: S.hangoutToReport(w.save, h.a, w.day), memories: F.memoryRefs(w, h.a), open: F.openOffer(w.save, h.a) };
+  }, { a: reportVisit.id })));
+  await ev((id) => { const g = window.__esl; const a = g.npcs.actorFor(id); if (!a) throw new Error('Reporting friend is absent from the resolved scene'); g.talkTo(a); }, reportVisit.id);
   await pump(async () => {
     const t = await page.locator('.dlg-en').innerText().catch(() => '');
     if (/with .*(yesterday|on |today)/.test(t) && !report) report = t;

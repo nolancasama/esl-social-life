@@ -8,6 +8,7 @@ import { DAYS } from '../data/content.js';
 import { dow, isWeekend } from '../world/time.js';
 
 export function actVerb(act, like) {
+  if (act === 'mall') return { en: 'go to Niji Mall', ja: 'にじモールに行く', emoji: '🛍️' };
   if (act === 'soccer') return { en: 'play soccer', ja: 'サッカーをする', emoji: '⚽' };
   if (act === 'cafe') return { en: 'go to the café', ja: 'カフェに行く', emoji: '☕' };
   if (like === 'baseball') return { en: 'play catch', ja: 'キャッチボールをする', emoji: '⚾' };

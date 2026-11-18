@@ -1,11 +1,24 @@
 // Resolves where an NPC is at a given (day, period): base weekly routine,
 // occasional seeded variation, weather, and plans made with the player.
 
-import { RNG } from '../core/rng.js';
+import { RNG, hashString } from '../core/rng.js';
 import { interest, LOCATIONS, HOME_ACTS, AWAY_ACTS, thirdPerson } from '../data/content.js';
 import { dow, isFreeTime, EVENING } from './time.js';
 
 const OUTDOOR = new Set(['park', 'town']);
+
+/** An independent seed avoids changing the existing schedule RNG stream.
+ * Only used for fresh NPCs; existing stored routines are never upgraded.
+ */
+export function weekendMallSlot(seed, npc) {
+  const key = hashString(`${seed}|${npc.id}|mall-weekend-v1`);
+  if (key % 3 !== 0) return null;
+  const candidates = key % 2 ? [[5, 0], [6, 1]] : [[6, 1], [5, 0]];
+  return candidates.find(([day, period]) => {
+    const slot = npc.schedule[day][period];
+    return !slot.with?.length && !slot.act.startsWith('away:');
+  }) || null;
+}
 
 /**
  * @param {object} ctx { seed, weather: (day) => string, plans: [] }
@@ -29,7 +42,7 @@ export function resolveSlot(ctx, npc, day, period) {
   // in a shared slot vary together (seeded by the whole group).
   const groupKey = [npc.id, ...slot.with].sort().join('+');
   const v = new RNG(`${ctx.seed}|vary|${groupKey}|${day}|${period}`);
-  if (v.chance(0.1) && !slot.act.startsWith('away:piano')) {
+  if (v.chance(0.1) && !slot.act.startsWith('away:piano') && !(slot.loc === 'mall' && slot.act === 'shopping')) {
     const alt = npc.likes[1 + v.int(0, 1)];
     const it = interest(alt);
     slot = { loc: v.pick(it.places), act: alt, with: slot.with, varied: true };
@@ -58,6 +71,7 @@ export function primaryPeriod(npc, dowIndex) {
 
 /** English + Japanese verb phrase for a schedule act (first person). */
 export function actPhrase(act) {
+  if (act === 'mall') return { en: 'eat at Niji Mall', ja: 'にじモールでごはんを食べます', emoji: '🛍️' };
   if (act === 'school') return { en: 'go to school', ja: '学校に行きます', emoji: '🏫' };
   if (act === 'walk') return { en: 'take a walk in town', ja: '町をさんぽします', emoji: '🚶' };
   if (act.startsWith('home:')) {

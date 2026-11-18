@@ -21,6 +21,7 @@ import { friendshipMoment, deliveryHandoff, plannedEventFlow, playerIntro, sline
 import { memoryRefs, markReferenced, canOffer, offerEvent, completeEvent, openOffer, eligibleEvents, recordPlayerAnswer, playerAnswer } from '../world/friendship.js';
 import { styleGesture } from '../world/personality.js';
 import { FOODS, petPhrase, listEn } from '../data/content.js';
+import { hangoutToReport } from '../world/social.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -61,7 +62,7 @@ export async function talkToNpc(game, actor) {
   const w = game.world;
   const npc = actor.npc;
   if (actor.special === 'teacher') return talkToTeacher(game, actor);
-  if (actor.special === 'staff') return game.activities.cafeCounter(actor);
+  if (actor.special === 'staff') return game.sceneId === 'mall' ? game.activities.mallCounter(game.scene.interact.find((it) => it.counter === 'sweets')) : game.activities.cafeCounter(actor);
   if (w.save.flags.fd === 'start' && npc.id === w.save.firstFriend) return firstDayIntro(game, actor);
 
   const c = await Conversation.start(game, [actor]);
@@ -150,6 +151,7 @@ async function greet(c, actor) {
     let l;
     if (mem.type === 'help') l = line(`Thank you for finding my ${mem.detail.item}! You're so kind!`, `${mem.detail.itemJa}を見つけてくれてありがとう！やさしいね！`, { area: 'adjectives', expr: 'adj.kind', template: "You're kind!" });
     else if (mem.act === 'cafe') l = line(`The ${mem.detail.foodEn || 'food'} at the café was delicious ${when}!`, `${whenJa}のカフェ、おいしかったね！`, { area: 'food' });
+    else if (mem.act === 'mall') l = line(`Niji Mall was fun ${when}! Let's go again!`, `${whenJa}のにじモール、楽しかったね！また行こう！`, { area: 'verbs' });
     else l = line(`${mem.act === 'soccer' ? 'Soccer' : 'Playing catch'} was fun ${when}! Let's play again!`, `${whenJa}の${mem.act === 'soccer' ? 'サッカー' : 'キャッチボール'}、楽しかったね！またやろう！`, { area: 'verbs' });
     await c.say(actor, l, { expr: 'happy', gesture: 'happy' });
     const r = await c.ask([
@@ -173,7 +175,8 @@ async function greet(c, actor) {
 async function rememberMoment(c, actor) {
   const w = c.world, npc = actor.npc;
   const k = `mem:${npc.id}`;
-  if (w.daily.asked[k]) return;
+  // Let friendshipMoment tell pending news before a recall can start another outing.
+  if (w.daily.asked[k] || hangoutToReport(w.save, npc.id, w.day)) return;
   const ref = memoryRefs(w, npc.id, { limit: 1 })[0];
   if (!ref) return;
   const again = ref.again && ACT_INFO[ref.again.act] ? ref.again.act : null;
@@ -205,11 +208,11 @@ async function rememberMoment(c, actor) {
   if (r.id === 'later') { await c.say(actor, sline(c, npc, 'declineOk'), { expr: 'happy' }); return; }
   if (r.id === 'again') { await startOrPlan(c, actor, again, null); return; }
   await c.say(actor, line('OK! What do you want to do?', 'いいよ！何をしたい？', { area: 'wantto', expr: 'q.wantdo', template: 'What do you want to do?' }));
-  let choices = ['soccer', 'catch', 'cafe'].filter((a) => a !== again && !(ACT_INFO[a].outdoor && w.weather === 'rainy'));
+  let choices = ['soccer', 'catch', 'cafe', 'mall'].filter((a) => a !== again && !(ACT_INFO[a].outdoor && w.weather === 'rainy'));
   if (!choices.length) choices = ['cafe'];
   const pick = await c.ask(choices.map((a) => {
     const vv = actVerb(a, null);
-    return opt(a, `I want to ${vv.en}.`, `${jaWant(vv.ja)}。`, { emoji: vv.emoji, phrases: [`i want to ${vv.en}`, vv.en], keys: [[a === 'cafe' ? 'cafe' : vv.en.split(' ').pop()]], area: 'wantto', expr: 'a.wantto', template: 'I want to ___.' });
+    return opt(a, `I want to ${vv.en}.`, `${jaWant(vv.ja)}。`, { emoji: vv.emoji, phrases: [`i want to ${vv.en}`, vv.en], keys: [[['cafe', 'mall'].includes(a) ? a : vv.en.split(' ').pop()]], area: 'wantto', expr: 'a.wantto', template: 'I want to ___.' });
   }));
   await c.say(actor, sline(c, npc, 'inviteYes'), { gesture: styleGesture(npc, 'happy'), expr: 'happy' });
   await startOrPlan(c, actor, pick.id, null);
@@ -397,6 +400,7 @@ function topicList(c, actor, guide) {
     const pa = playableActFor(w, npc);
     const v = actVerb(pa.act, pa.like);
     add({ id: 'invite', area: 'wantto', base: pa.known ? 4.2 : 2.2, card: opt('t-invite', `Do you want to ${v.en}?`, jaInvite(v.ja), { emoji: v.emoji, phrases: [`do you want to ${v.en}`, `want to ${v.en}`, `lets ${v.en}`], keys: [[pa.act === 'cafe' ? 'cafe' : v.en.split(' ').slice(-1)[0]]], expr: 'q.wantto', area: 'wantto', template: 'Do you want to ___?' }), run: (cc, a) => topicInvite(cc, a, pa.act, pa.like) });
+    if (lvl >= 2) add({ id: 'mall', area: 'wantto', base: 2.2, card: opt('t-mall', 'Do you want to go to Niji Mall?', 'にじモールに行かない？', { emoji: '🛍️', phrases: ['do you want to go to niji mall', 'go to the mall', 'mall'], keys: [['mall']], expr: 'q.wantto', area: 'wantto', template: 'Do you want to ___?' }), run: (cc, a) => topicInvite(cc, a, 'mall', null) });
     if (free) add({ id: 'wantdo', area: 'wantto', base: 2.6, card: opt('t-wantdo', 'What do you want to do?', '何をしたい？', { emoji: '💭', phrases: ['what do you want to do'], keys: [['want']], expr: 'q.wantdo', area: 'wantto', template: 'What do you want to do?' }), run: topicWantDo });
   }
   // Close friends can be invited home (home_visit).
@@ -643,9 +647,11 @@ async function topicWantDo(c, actor) {
   if (pa.like) w.learn(npc.id, `like:${npc.likes.indexOf(pa.like)}`);
   const r = await c.ask([
     opt('ok', `OK! Let's ${v.en}!`, `いいよ！${jaLets(v.ja)}！`, { emoji: v.emoji, phrases: [`lets ${v.en}`, 'ok', 'lets go', 'sure'], keys: YES_KEYS, area: 'wantto', expr: 'a.lets', template: "Let's ___!" }),
+    opt('mall', "Let's go to Niji Mall!", 'にじモールに行こう！', { emoji: '🛍️', phrases: ['lets go to niji mall', 'mall'], keys: [['mall']], area: 'wantto', expr: 'a.lets', template: "Let's ___!" }),
     opt('later', 'Sounds fun! Maybe later.', '楽しそう！またあとでね。', { emoji: '🙂', phrases: ['maybe later', 'later', 'no'], keys: NO_KEYS }),
   ]);
-  if (r.id === 'ok') await startOrPlan(c, actor, act, pa.like);
+  if (r.id === 'mall') await startOrPlan(c, actor, 'mall', null);
+  else if (r.id === 'ok') await startOrPlan(c, actor, act, pa.like);
   else await c.say(actor, line('OK!', 'オッケー！'));
 }
 
@@ -677,8 +683,9 @@ async function startOrPlan(c, actor, act, like) {
   const info = ACT_INFO[act];
   if (w.schoolTime) {
     const plan = w.addPlan({ npcIds: [npc.id], day: w.day, period: 1, loc: info.loc, act, source: 'talk' });
-    const where = info.loc === 'park' ? 'the park' : 'the café';
-    await c.say(actor, line(`Let's ${actVerb(act, like).en} after school! Let's meet at ${where}!`, `放課後に${jaLets(actVerb(act, like).ja)}！${info.loc === 'park' ? '公園' : 'カフェ'}で会おう！`, { expr: 'a.lets', area: 'wantto', template: "Let's meet at ___!" }), { gesture: 'happy', expr: 'happy' });
+    const where = info.loc === 'park' ? 'the park' : info.loc === 'mall' ? 'Niji Mall' : 'the café';
+    const whereJa = info.loc === 'park' ? '公園' : info.loc === 'mall' ? 'にじモール' : 'カフェ';
+    await c.say(actor, line(`Let's ${actVerb(act, like).en} after school! Let's meet at ${where}!`, `放課後に${jaLets(actVerb(act, like).ja)}！${whereJa}で会おう！`, { expr: 'a.lets', area: 'wantto', template: "Let's meet at ___!" }), { gesture: 'happy', expr: 'happy' });
     if (w.save.flags.fd === 'introduced' && npc.id === w.save.introNpc) { w.save.flags.fd = 'planned'; bus.emit('firstday', { stage: 'planned' }); }
     c.game.hud.planToast(plan);
     c.result = { planned: plan };

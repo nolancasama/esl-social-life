@@ -19,6 +19,7 @@ import { dow } from '../world/time.js';
 const WHERE = [
   { id: 'park', en: "Let's go to the park!", ja: '公園に行こう！', emoji: '🌸' },
   { id: 'cafe', en: "Let's go to the café!", ja: 'カフェに行こう！', emoji: '☕' },
+  { id: 'mall', en: "Let's go to Niji Mall!", ja: 'にじモールに行こう！', emoji: '🛍️' },
 ];
 const WHAT = [
   { id: 'soccer', en: 'I want to play soccer.', ja: 'サッカーをしたい。', emoji: '⚽' },
@@ -80,8 +81,8 @@ export async function planOuting(game) {
     return o;
   };
   try {
-    let where = await ask('Where do you want to go?', 'どこに行きたい？', WHERE.map((x) => opt(x.id, x.en, x.ja, { emoji: x.emoji, keys: [[x.id === 'cafe' ? 'cafe' : 'park']], phrases: [x.en.toLowerCase(), x.id], area: 'wantto', expr: 'a.letsgo', template: "Let's go to the ___!" })));
-    let act = 'cafe';
+    let where = await ask('Where do you want to go?', 'どこに行きたい？', WHERE.map((x) => opt(x.id, x.en, x.ja, { emoji: x.emoji, keys: [[x.id]], phrases: [x.en.toLowerCase(), x.id], area: 'wantto', expr: 'a.letsgo', template: "Let's go to the ___!" })));
+    let act = where.id === 'mall' ? 'mall' : 'cafe';
     if (where.id === 'park') {
       const what = await ask('What do you want to do?', '何をしたい？', WHAT.map((x) => opt(x.id, x.en, x.ja, { emoji: x.emoji, keys: [[x.id]], phrases: [x.en.toLowerCase(), x.id], area: 'wantto', expr: 'a.wantto', template: 'I want to ___.' })));
       act = what.id;
@@ -123,6 +124,7 @@ export async function planOuting(game) {
       game.hud.toast({ icon: '🙂', en: 'Nobody is free then. Try another day!', ja: 'その日はみんないそがしいみたい。ほかの日にしよう！' });
       return null;
     }
+    if (loc === 'mall') await ask('See you at Niji Mall!', 'にじモールで会おうね！', [opt('see', 'See you there!', 'そこで会おうね！', { emoji: '👋', phrases: ['see you there', 'see you'], keys: [['see']], area: 'wantto' })]);
     const plan = w.addPlan({ npcIds: yes.map((n) => n.id), day: slot.day, period: slot.period, loc, act, source: 'group' });
     plan.group = yes.length >= 2;
     game.hud.planToast(plan);

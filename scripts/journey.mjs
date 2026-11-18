@@ -32,8 +32,19 @@ const talkTo = async (id, label, prefer, max = 120) => {
   await settle();
 };
 const passBy = async (id) => {
+  // Observe the greeting on the frame it happens: ambient chat can replace
+  // its bubble before a fixed 900 ms screenshot delay has elapsed.
+  await page.waitForFunction((id) => {
+    const a = window.__esl.npcs.actorFor(id);
+    return a && !a.walk && !a.engaged && !a.waiting;
+  }, id, { timeout: 15000 });
   await ev((id) => { const g = window.__esl; const a = g.npcs.actorFor(id); if (!a) return; a.waved = false; a.bubble = null; g.player.place(a.char.root.position.x + 1.6, a.char.root.position.z + 1.2, -2.2); }, id);
-  await sleep(900);
+  const greeting = await page.waitForFunction((id) => {
+    const g = window.__esl, a = g.npcs.actorFor(id), bubble = a?.bubble?.text || '';
+    const hi = g.world.level(id) >= 3 ? bubble.includes('👋') && bubble.length > 2 : bubble && !bubble.includes('👋');
+    return a?.waved && hi ? { waved: a.waved, bubble, actorMode: a.mode } : false;
+  }, id, { polling: 'raf', timeout: 5000 }).catch(() => null);
+  if (greeting) { const result = await greeting.jsonValue(); await greeting.dispose(); return result; }
   return ev((id) => { const a = window.__esl.npcs.actorFor(id); return a ? { waved: a.waved, bubble: a.bubble?.text || '' } : null; }, id);
 };
 
@@ -86,12 +97,13 @@ const approached = await ev((id) => window.__esl.friendshipDebug.approach(id), S
 if (approached) await page.waitForFunction((id) => !!window.__esl.npcs.actorFor(id)?.waiting, S, { timeout: 15000 }).catch(() => {});
 await shot('friend-comes-over');
 // Accept the special event; politely skip anything else first (e.g. "play catch again?").
-const ACCEPT = ["Yes! Let's go now!", "Sure! Let's practice now!", 'How about after school?', 'Sure! I can do it!', 'Come here!', 'This is', 'is my friend.', 'likes', 'can ', 'good at', 'Maybe next time.'];
+const ACCEPT = ["Yes! Let's go now!", "Sure! Let's practice now!", 'How about', 'Sure! I can do it!', 'Come here!', 'This is', 'is my friend.', 'likes', 'can ', 'good at', 'Maybe next time.'];
 await talkTo(S, 'offer', [...ACCEPT, ...TALK]);
 const offersNow = () => ev(() => JSON.parse(JSON.stringify(window.__esl.friendship.offers)));
 let offer = (await offersNow()).find((o) => o.npcId === S);
 const doneId = (await ev(() => window.__esl.friendship.history.map((h) => h.id))).find((id) => id.includes(`:${S}:`) && !id.startsWith('remember'));
 log('offer', offer, 'done', doneId);
+log('event state', await ev((id) => Object.values(window.__esl.world.save.friendship.instances).filter((i) => i.npcId === id).map((i) => ({ id: i.id, status: i.status, slot: i.slot })), S));
 if (!offer && !doneId) {
   // Nothing was picked this time: the friend offers a hobby (same path, made explicit).
   await ev((id) => window.__esl.friendshipDebug.offer('hobby', id, { act: 'hobby:draw', like: 'drawing', direct: true }), S);
@@ -103,15 +115,20 @@ if (offer && offer.template === 'delivery') {
   const target = await ev((oid) => window.__esl.world.save.friendship.instances[oid].data.target, offer.id);
   await talkTo(target, 'deliver', ['Here you are!', 'is kind!', 'Bye! See you!']);
 } else if (offer && offer.status === 'scheduled') {
-  await ev(() => { window.__adv = window.__esl.advanceTime({ reason: 'test' }); });
-  await page.waitForFunction(() => window.__esl.world.period === 1, null, { timeout: 30000 });
-  await settle();
-  const loc = await ev((oid) => window.__esl.world.save.friendship.instances[oid].slot.loc, offer.id);
-  await ev(async (loc) => { await window.__esl.enterScene(loc === 'cafe' ? 'cafe' : 'town', loc === 'cafe' ? 'door' : 'park'); }, loc);
+  // The friend may be busy today. Attend the date they actually proposed,
+  // just as the other event e2es do, rather than assuming this afternoon.
+  const slot = await ev((oid) => window.__esl.world.save.friendship.instances[oid].slot, offer.id);
+  log('attend event', slot);
+  await ev(async (slot) => {
+    const g = window.__esl, w = g.world;
+    w.save.time = { day: slot.day, period: slot.period }; w.ensureDaily();
+    await g.enterScene(slot.loc === 'cafe' ? 'cafe' : 'town', slot.loc === 'cafe' ? 'door' : 'park');
+  }, slot);
   await settle();
   await ev((id) => { const g = window.__esl; g.talkTo(g.npcs.actorFor(id)); }, S);
-  await pump(async () => (await ev(() => window.__esl.world.period)) === 2 && (await idle()), { label: 'event', max: 400, prefer: ["Let's go!", 'I want to draw', "It's", 'You can draw well!', "Let's look", 'One!', 'Two!', 'Yes, I can!', 'You can sing well, too!', 'Ready? Catch!', 'You can do it!', 'Nice! One more!', 'Last one!', 'Great job!', 'Yes! It was fun!'] });
+  await pump(async () => (await ev(() => window.__esl.world.period)) === slot.period + 1 && (await idle()), { label: 'event', max: 400, prefer: ["Let's go!", 'I want to draw', "It's", 'You can draw well!', "Let's look", 'One!', 'Two!', 'Yes, I can!', 'You can sing well, too!', 'Ready? Catch!', 'You can do it!', 'Nice! One more!', 'Last one!', 'Great job!', 'Yes! It was fun!'] });
   await settle();
+  expect(await ev((slot) => { const w = window.__esl.world; return w.day === slot.day && w.period === slot.period + 1; }, slot), 'the scheduled event used exactly its booked period');
 }
 const memory = await ev((id) => {
   const w = window.__esl.world;
@@ -142,7 +159,7 @@ await settle();
 await ev((id) => { const g = window.__esl, w = g.world; if (!g.npcs.actorFor(id)) g.npcs.ensure(w.npc(id), g.player.x + 3, g.player.z + 3, 0); }, S);
 const laterHello = await passBy(S);
 log('later hello', laterHello);
-expect(laterHello && laterHello.waved && laterHello.bubble.includes('👋'), `now they wave and say hi ("${laterHello?.bubble}")`);
+expect(laterHello && laterHello.waved && laterHello.bubble.includes('👋') && laterHello.bubble.length > 2, `now they wave and say hi ("${laterHello?.bubble}")`);
 await shot('later-day');
 
 await browser.close();

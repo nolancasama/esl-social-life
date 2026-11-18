@@ -13,7 +13,7 @@ import { dow, isFreeTime } from './time.js';
 import { interest } from '../data/content.js';
 
 export const DAILY_HANGOUTS = 2;
-const VISIBLE = ['park', 'cafe'];
+const VISIBLE = ['park', 'cafe', 'mall'];
 const OUTDOOR = new Set(['park', 'town']);
 
 const pairOf = (a, b) => [a, b].sort().join('|');
@@ -26,6 +26,12 @@ export function hangoutActivity(a, b, weather = 'sunny') {
   let loc = like ? visible(like) : 'park';
   let act = like || 'walk';
   if (weather === 'rainy' && OUTDOOR.has(loc)) { loc = 'cafe'; act = 'sweets'; }
+  // A pair keeps its indoor preference across reloads, without consuming the
+  // planner's RNG or moving any already-stored hangout.
+  if (loc === 'cafe' && a.id && b.id && new RNG(`mall-hangout|${pairOf(a.id, b.id)}`).chance(0.5)) {
+    loc = 'mall'; act = 'mall';
+  }
+  if (loc === 'mall') act = 'mall';
   if (act === 'walk') loc = 'town';
   return { loc, act };
 }
@@ -79,12 +85,17 @@ export function settleHangouts(save, day, period) {
 }
 
 /** A hangout this classmate can tell the player about (it happened in the last 3 days, not told yet). */
+// When a friend has several hangouts to tell you about, the one the player
+// made happen by introducing them comes first ("Thank you for introducing
+// us!"), then the oldest. The others are told on later talks.
 export function hangoutToReport(save, npcId, day) {
-  return (save.npcPlans || []).find((p) => p.status === 'done' && !p.reported && (p.a === npcId || p.b === npcId) && day - p.day >= 0 && day - p.day <= 3) || null;
+  const due = (save.npcPlans || []).filter((p) => p.status === 'done' && !p.reported && (p.a === npcId || p.b === npcId) && day - p.day >= 0 && day - p.day <= 3);
+  return due.find((p) => p.source === 'intro') || due[0] || null;
 }
 
 // "I played soccer with Hana yesterday!" — past tense for the acts hangouts use.
 const PAST = {
+  mall: ['ate at Niji Mall', 'にじモールでごはんを食べた'],
   soccer: ['played soccer', 'サッカーをした'], baseball: ['played baseball', '野球をした'], dodgeball: ['played dodgeball', 'ドッジボールをした'],
   basketball: ['played basketball', 'バスケをした'], running: ['went jogging', 'ジョギングした'], music: ['listened to music', '音楽を聞いた'],
   singing: ['sang songs', '歌を歌った'], dancing: ['danced', 'おどった'], drawing: ['drew pictures', '絵をかいた'], reading: ['read books', '本を読んだ'],
@@ -99,6 +110,7 @@ export function pastPhrase(act) {
 
 /** The shared activity a hangout turns into when the player joins (or null). */
 export function joinableActivity(act) {
+  if (act === 'mall') return 'mall';
   if (act === 'soccer') return 'soccer';
   if (['baseball', 'dodgeball', 'basketball'].includes(act)) return 'catch';
   if (['sweets', 'reading', 'comics', 'music'].includes(act)) return 'cafe';

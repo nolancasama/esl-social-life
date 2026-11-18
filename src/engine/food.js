@@ -7,6 +7,20 @@ export function foodMesh(id) {
   const b = new StaticBuilder();
   b.cyl(0.2, 0.17, 0.025, '#FFFFFF', 0, 0, 0, { seg: 16 });
   switch (id) {
+    case 'ramen':
+      b.cyl(0.17, 0.11, 0.13, '#DF8D73', 0, 0.025, 0, { seg: 14 });
+      b.cyl(0.15, 0.15, 0.015, '#F8D68D', 0, 0.155, 0, { seg: 14 });
+      for (const dx of [-0.06, 0, 0.06]) b.box(0.015, 0.01, 0.18, '#FFF1BE', dx, 0.17, 0);
+      b.sphere(0.035, '#77B978', 0.07, 0.18, 0.05);
+      break;
+    case 'sushi':
+      for (const dx of [-0.08, 0.08]) { b.box(0.11, 0.055, 0.17, '#FFFFFF', dx, 0.025, 0); b.box(0.12, 0.03, 0.19, '#F3967B', dx, 0.08, 0); }
+      break;
+    case 'crepe':
+      b.cone(0.1, 0.22, '#E6BB7A', 0, 0.035, 0, { rz: Math.PI, seg: 10 });
+      b.sphere(0.075, '#FFF2DF', 0, 0.25, 0);
+      b.sphere(0.035, '#E78E9B', 0.04, 0.3, 0);
+      break;
     case 'hamburger':
       b.cyl(0.11, 0.11, 0.04, '#E0A458', 0, 0.025, 0, { seg: 14 });
       b.cyl(0.115, 0.115, 0.035, '#6B3E26', 0, 0.065, 0, { seg: 14 });
@@ -101,8 +115,15 @@ export function itemMesh(id) {
 }
 
 export function souvenirMesh(kind) {
+  if (['mall_book', 'mall_comic', 'mall_ball', 'mall_cap'].includes(kind)) return itemMesh({ mall_book: 'book', mall_comic: 'book', mall_ball: 'ball', mall_cap: 'cap' }[kind]);
   const b = new StaticBuilder();
   switch (kind) {
+    case 'mall_robot': b.box(0.16, 0.16, 0.1, '#7EB7CD', 0, 0.06, 0); b.box(0.14, 0.1, 0.12, '#A6D7E6', 0, 0.22, 0); for (const dx of [-0.04, 0.04]) { b.sphere(0.015, '#2E3440', dx, 0.28, 0.065); b.box(0.04, 0.07, 0.05, '#EAC05D', dx, 0, 0); } break;
+    case 'mall_game': b.box(0.28, 0.06, 0.22, '#8CB9A8', 0, 0, 0); b.box(0.08, 0.01, 0.08, '#F9E2A6', 0, 0.06, 0); break;
+    case 'mall_kendama': b.cyl(0.02, 0.025, 0.18, '#C99F72', 0, 0, 0, { seg: 8 }); b.box(0.16, 0.025, 0.04, '#C99F72', 0, 0.12, 0); b.sphere(0.06, '#E68F9A', 0, 0.23, 0); break;
+    case 'mall_pencils': b.box(0.17, 0.12, 0.05, '#FFF1D5', 0, 0, 0); for (const [i, c] of ['#E98B97', '#E7C45E', '#79BBA7', '#86ACD1'].entries()) b.cyl(0.012, 0.012, 0.18, c, -0.06 + i * 0.04, 0.035, 0, { seg: 6 }); break;
+    case 'mall_shirt': b.box(0.17, 0.17, 0.05, '#81B9CD', 0, 0, 0); b.box(0.29, 0.07, 0.05, '#81B9CD', 0, 0.11, 0); break;
+    case 'mall': b.box(0.17, 0.18, 0.1, '#F4CE78', 0, 0, 0); b.add(G.torus(0.045, 0.012, 4, 10), '#78AEA8', { y: 0.2 }); break;
     case 'postcard': b.box(0.3, 0.2, 0.025, '#FFF6E6', 0, 0, 0); b.box(0.08, 0.07, 0.005, '#FF8FA3', 0.085, 0.11, 0.016); b.box(0.14, 0.045, 0.005, '#80C7AB', -0.035, 0.045, 0.016); break;
     case 'soccer': b.sphere(0.12, '#FFFFFF', 0, 0.12, 0); b.sphere(0.05, '#2E3440', 0, 0.2, 0.07); break;
     case 'catch': b.sphere(0.07, '#FFFFFF', 0, 0.07, 0); b.sphere(0.1, '#B5651D', 0.12, 0.08, 0, { sx: 1.2, sz: 0.5 }); break;

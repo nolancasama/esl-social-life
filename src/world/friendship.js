@@ -436,6 +436,8 @@ export function describeMemory(world, m, npcId, day) {
     en = 'We went to the café'; ja = 'カフェに行ったね'; again = { act: 'cafe' }; place = 'cafe';
     const fd = FOODS.find((x) => x.id === d.foodId);
     if (fd) { extraEn = ` You ate ${fd.a}!`; extraJa = `${fd.ja}を食べてたね！`; }
+  } else if (m.type === 'activity' && m.act === 'mall') {
+    en = 'We ate at Niji Mall'; ja = 'にじモールでごはんを食べたね'; again = { act: 'mall' }; place = 'mall';
   } else if (m.type === 'activity' && m.act === 'soccer') {
     en = 'We played soccer'; ja = 'サッカーしたね'; again = { act: 'soccer' }; place = 'park';
   } else if (m.type === 'activity' && m.act === 'catch') {

@@ -18,6 +18,7 @@ import { scheduleHangout, settleHangouts } from '../world/social.js';
 import { styleData } from '../world/personality.js';
 
 export const ACT_INFO = {
+  mall: { en: 'go to Niji Mall', ja: 'にじモールに行く', emoji: '🛍️', loc: 'mall', outdoor: false },
   soccer: { en: 'play soccer', ja: 'サッカーをする', emoji: '⚽', loc: 'park', outdoor: true },
   catch: { en: 'play catch', ja: 'キャッチボールをする', emoji: '⚾', loc: 'park', outdoor: true },
   cafe: { en: 'go to the café', ja: 'カフェに行く', emoji: '☕', loc: 'cafe', outdoor: false },
@@ -285,9 +286,10 @@ export class World {
   /** An invitation built from the NPC's interests and an upcoming free slot. */
   makeInvite(npc, rng = new RNG('x')) {
     const playable = npc.likes.map((id) => interest(id).activity).filter(Boolean);
-    let act = playable[0] || rng.pick(['cafe', 'catch']);
+    let act = playable[0] || rng.pick(['cafe', 'catch', 'mall']);
     const slot = this.nextFreeSlot(npc.id, this.day + 1, MORNING, { weekendFirst: rng.chance(0.6) });
     if (ACT_INFO[act].outdoor && this.weatherOn(slot.day) === 'rainy') act = 'cafe';
+    if (act === 'cafe' && rng.chance(0.4)) act = 'mall';
     const a = ACT_INFO[act];
     const day = DAYS[dow(slot.day)];
     const when = slot.day === this.day + 1 ? (slot.period === AFTERNOON && !isWeekend(slot.day) ? 'tomorrow after school' : 'tomorrow') : `on ${day.en}`;

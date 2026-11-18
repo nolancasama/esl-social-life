@@ -5,9 +5,13 @@ import { DEFAULT_ROSTER } from '../data/roster.js';
 import { World } from '../game/world.js';
 import { migrateSave } from './migrate.js';
 import { scheduleHangout, settleHangouts, hangoutToReport, hangoutFor, hangoutActivity, pastPhrase, joinableActivity, DAILY_HANGOUTS } from './social.js';
-import { npcFree, offerEvent, completeEvent } from './friendship.js';
+import { npcFree, offerEvent, completeEvent, memoryRefs } from './friendship.js';
 import { busyReason } from '../dialogue/outing.js';
 import { dow } from './time.js';
+import { actPhrase } from './schedule.js';
+import { Conversation } from '../dialogue/runner.js';
+import { talkToNpc } from '../dialogue/talk.js';
+import { NpcManager } from '../game/npcs.js';
 
 const SEED = 'social-seed';
 const CLASS = buildClass(DEFAULT_ROSTER, SEED);
@@ -82,6 +86,75 @@ test('after a hangout, either friend can tell the player once', () => {
   assert.ok(!w.save.npcPlans.includes(h), 'old hangouts are forgotten');
 });
 
+test('a hangout the player made by introducing comes first, then the oldest', () => {
+  const plan = (id, day, source) => ({ id, a: 'ken', b: `x${id}`, day, period: 1, status: 'done', source, reported: false });
+  const older = plan('p1', 2, 'play'), intro = plan('p2', 3, 'intro'), newer = plan('p3', 4, 'play');
+  const save = { npcPlans: [older, intro, newer] };
+  assert.equal(hangoutToReport(save, 'ken', 5), intro);
+  intro.reported = true;
+  assert.equal(hangoutToReport(save, 'ken', 5), older);
+});
+
+test('a pending hangout report comes before a shared outing recall and makes a plan with both friends', async (t) => {
+  const w = makeWorld({ day: 0 });
+  const [a, b] = unlinked(w);
+  for (const id of [a, b]) { w.meet(id); w.rel(id).level = 2; w.rel(id).xp = 40; }
+  const memory = w.addMemory({ npcIds: [a, b], type: 'activity', act: 'cafe', focus: [], detail: { foodId: 'cake' } });
+  const h = scheduleHangout(w, a, b, { source: 'intro' });
+  w.save.time = { day: h.day + 1, period: 1 };
+  w.ensureDaily();
+  settleHangouts(w.save, w.day, w.period);
+  w.daily.quiz[a] = true;
+  const said = [], asked = [];
+  const game = { world: w, locationId: 'town', sceneId: 'town', scene: { outdoor: true }, npcs: { nearby: () => [] }, hud: { planToast() {} }, save() {} };
+  const c = {
+    game, world: w, playerName: 'Rio', done: new Set(), ended: false, result: null,
+    async say(actor, l) { said.push(l.en); },
+    async ask(options) {
+      const choice = ['next', 'later', 'bye'].map((id) => options.find((o) => o.id === id)).find(Boolean);
+      assert.ok(choice, `unexpected choices: ${options.map((o) => o.id)}`);
+      asked.push(choice.id);
+      return choice;
+    },
+    async end() { this.ended = true; },
+  };
+  t.mock.method(Conversation, 'start', async () => c);
+  assert.equal(memoryRefs(w, a)[0].memoryId, memory.id, 'the greeting has a real competing café memory');
+  await talkToNpc(game, { npc: w.npc(a) });
+  assert.match(said[1], /Thank you for introducing us/);
+  assert.equal(asked[0], 'next', 'the first choice answers the hangout report');
+  assert.equal(w.save.friendship.refs[memory.id], undefined, 'the ordinary memory stays available for a later conversation');
+  assert.equal(h.reported, true);
+  assert.ok(w.save.plans.some((p) => p.status === 'pending' && p.npcIds.length === 2 && [a, b].every((id) => p.npcIds.includes(id))));
+});
+
+test('hangout pairs stay together ahead of routine groups and lost-item placement, including at the mall', () => {
+  for (const loc of ['park', 'mall']) for (const lost of [false, true]) {
+    const hang = { loc, act: loc === 'mall' ? 'mall' : 'sweets', hangout: 'hang:a|b' };
+    const slots = [
+      { loc, act: 'reading', with: ['a', 'c', 'd'] },
+      { ...hang, with: ['b'] },
+      { loc, act: 'reading', with: ['routine'] },
+      { loc, act: 'reading', with: ['routine'] },
+      { ...hang, with: ['a'] },
+    ];
+    const npcs = ['routine', 'a', 'c', 'd', 'b'].map((id) => ({ id }));
+    const world = {
+      npcs, slot: (n) => slots[npcs.indexOf(n)], plansNow: () => [], schoolTime: false, evening: true, period: 1,
+      save: { flags: { fd: 'done' } }, daily: { lost: lost ? { npcId: 'a', period: 1 } : null, lostDone: false },
+    };
+    const scene = { collision: { dynamic: [] } };
+    const manager = new NpcManager({ world, scene, sceneId: loc === 'park' ? 'town' : loc });
+    const groups = [], singles = [];
+    manager._placeGroup = (g) => groups.push(g.map((e) => e.n.id));
+    manager._placeSingle = (e) => singles.push(e.n.id);
+    manager._spawn = (e) => singles.push(e.n.id);
+    manager.populate();
+    assert.deepEqual(groups[0], ['a', 'b'], `${loc}: the hangout has first use of group space`);
+    assert.ok(!singles.includes('a') && !singles.includes('b'), `${loc}: neither friend is pulled away`);
+  }
+});
+
 test('hangout activities come from what the two like; rain moves them inside', () => {
   const a = { likes: ['soccer', 'drawing', 'piano'] }, b = { likes: ['reading', 'soccer', 'games'] };
   assert.deepEqual(hangoutActivity(a, b, 'sunny'), { loc: 'park', act: 'soccer' });
@@ -89,6 +162,35 @@ test('hangout activities come from what the two like; rain moves them inside', (
   assert.equal(pastPhrase('soccer').en, 'played soccer');
   assert.equal(joinableActivity('soccer'), 'soccer');
   assert.equal(joinableActivity('drawing'), null);
+});
+
+test('indoor hangouts deterministically include Niji Mall and stay joinable', () => {
+  const venues = new Set();
+  for (let i = 0; i < 24; i++) {
+    const a = { id: `mall-a${i}`, likes: ['reading'] };
+    const b = { id: `mall-b${i}`, likes: ['reading'] };
+    const h = hangoutActivity(a, b);
+    venues.add(h.loc);
+    assert.deepEqual(h, hangoutActivity(a, b), 'same pair, same venue after a reload');
+    assert.deepEqual(h, hangoutActivity(b, a), 'the preference belongs to the pair');
+    if (h.loc === 'mall') assert.equal(joinableActivity(h.act), 'mall');
+  }
+  assert.deepEqual([...venues].sort(), ['cafe', 'mall']);
+  assert.equal(pastPhrase('mall').en, 'ate at Niji Mall');
+  const shopping = hangoutActivity({ id: 'shop-a', likes: ['shopping'] }, { id: 'shop-b', likes: ['shopping'] });
+  assert.deepEqual(shopping, { loc: 'mall', act: 'mall' });
+  assert.equal(joinableActivity(shopping.act), 'mall');
+  assert.equal(actPhrase(shopping.act).en, 'eat at Niji Mall');
+});
+
+test('friends can invite the player to Niji Mall without changing the café activity', () => {
+  const w = makeWorld();
+  const n = { ...w.npcs[0], likes: ['sweets'] };
+  const invite = w.makeInvite(n, { chance: () => true });
+  assert.equal(invite.invite.act, 'mall');
+  assert.equal(invite.invite.loc, 'mall');
+  assert.match(invite.en, /Niji Mall/);
+  assert.ok(invite.ja.includes('にじモール'));
 });
 
 test('good friends sometimes invite you along with one of their friends', () => {

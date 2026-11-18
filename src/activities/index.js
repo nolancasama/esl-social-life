@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { playBall } from './ballplay.js';
 import { playCafe } from './cafe.js';
+import { playMall, shopAtMall, orderAtMall } from './mall.js';
 import { Conversation, opt } from '../dialogue/runner.js';
 import { line } from '../dialogue/lines.js';
 import { PHRASES } from '../dialogue/intent.js';
@@ -48,6 +49,7 @@ const ACT_NAMES = {
   soccer: { en: 'Soccer at Sakura Park', ja: 'さくら公園でサッカー', thanks: ['Thank you for today! Soccer was fun! ⚽', '今日はありがとう！サッカー楽しかったね！'] },
   catch: { en: 'Playing catch at the park', ja: '公園でキャッチボール', thanks: ['Thank you for today! Playing catch was fun! ⚾', '今日はありがとう！キャッチボール楽しかったね！'] },
   cafe: { en: 'Lunch at Café Komorebi', ja: 'カフェ・こもれびで食事', thanks: ['Thank you for today! The café was so good! ☕', '今日はありがとう！カフェ、おいしかったね！'] },
+  mall: { en: 'A day at Niji Mall', ja: 'にじモールでお出かけ', thanks: ['Thank you for today! Niji Mall was fun! 🛍️', '今日はありがとう！にじモール、楽しかったね！'] },
 };
 
 export class Activities {
@@ -64,6 +66,8 @@ export class Activities {
   }
 
   startDirections(actor, event) { return guideVisitor(this.game, actor, event); }
+  mallShop(target) { return shopAtMall(this.game, target); }
+  mallCounter(target) { return orderAtMall(this.game, target); }
 
   /** Best-friend milestone (an event activity with its own scene). */
   runMilestone(actor, event, plan) {
@@ -85,6 +89,7 @@ export class Activities {
     try {
       if (play) result = await play(game, actors);
       else if (act === 'cafe') result = await playCafe(game, actors, { plan, celebrate: variant?.celebrate || null });
+      else if (act === 'mall') result = await playMall(game, actors);
       else result = await playBall(game, actors, { soccer: act === 'soccer', like });
     } catch (err) {
       console.error('[activity] failed', err);

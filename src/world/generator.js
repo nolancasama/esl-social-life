@@ -5,6 +5,7 @@
 
 import { RNG, hashString } from '../core/rng.js';
 import { assignStyles } from './personality.js';
+import { weekendMallSlot } from './schedule.js';
 import {
   INTERESTS, ABILITIES, FOODS, DRINKS, SUBJECTS, PETS, ADJECTIVES, ATTRACTIONS,
   HOME_ACTS, AWAY_ACTS, interest, LOCATIONS,
@@ -338,19 +339,20 @@ function alignGroups(npcs, rng) {
 }
 
 function ensureLiveliness(npcs, rng) {
+  const visibleLoc = (loc) => VISIBLE.includes(loc) || loc === 'mall';
   const need = Math.max(2, Math.ceil(npcs.length * 0.3));
   for (let dow = 0; dow < 7; dow++) {
     for (let per = 0; per < 2; per++) {
       if (dow < 5 && per === 0) continue;
-      let visible = npcs.filter((n) => VISIBLE.includes(n.schedule[dow][per].loc));
-      const hidden = rng.shuffle(npcs.filter((n) => !VISIBLE.includes(n.schedule[dow][per].loc) && !n.schedule[dow][per].act.startsWith('away:piano') && !(dow === 5 && per === 1)));
+      let visible = npcs.filter((n) => visibleLoc(n.schedule[dow][per].loc));
+      const hidden = rng.shuffle(npcs.filter((n) => !visibleLoc(n.schedule[dow][per].loc) && !n.schedule[dow][per].act.startsWith('away:piano') && !(dow === 5 && per === 1)));
       while (visible.length < need && hidden.length) {
         const n = hidden.shift();
         const like = n.likes.find((id) => interest(id).places.some((pl) => VISIBLE.includes(pl)));
         n.schedule[dow][per] = like
           ? { loc: interest(like).places.find((pl) => VISIBLE.includes(pl)), act: like, with: [] }
           : { loc: 'town', act: 'walk', with: [] };
-        visible = npcs.filter((x) => VISIBLE.includes(x.schedule[dow][per].loc));
+        visible = npcs.filter((x) => visibleLoc(x.schedule[dow][per].loc));
       }
     }
   }
@@ -388,6 +390,7 @@ export function buildClass(roster, seed, prev = null) {
   }
   const rng = new RNG(`${seed}|links|${npcs.length}`);
   linkFriends(npcs, rng, roster);
+  const freshSchedules = npcs.filter((n) => !n.schedule);
   for (const n of npcs) {
     if (!n.schedule) n.schedule = buildSchedule(n, new RNG(`${seed}|sched|${n.id}`));
     // Drop schedule companions who left the class.
@@ -395,6 +398,10 @@ export function buildClass(roster, seed, prev = null) {
   }
   if (!prev) alignGroups(npcs, new RNG(`${seed}|align`));
   ensureLiveliness(npcs, new RNG(`${seed}|lively`));
+  for (const n of freshSchedules) {
+    const slot = weekendMallSlot(seed, n);
+    if (slot) n.schedule[slot[0]][slot[1]] = { loc: 'mall', act: 'shopping', with: [] };
+  }
   // Behaviour styles: kept for existing profiles, balanced for newcomers.
   assignStyles(npcs, seed);
   return npcs;

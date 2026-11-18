@@ -34,6 +34,18 @@ test('migration is idempotent', () => {
   assert.equal(recoverInterrupted(twice), false);
 });
 
+test('version 2 saves receive this week\'s allowance without changing their progress', () => {
+  const v2 = { ...fixture(), version: 2, pocketMoney: undefined };
+  const before = structuredClone(v2);
+  const upgraded = migrateSave(v2);
+  assert.equal(upgraded.version, 3);
+  assert.deepEqual(upgraded.pocketMoney, { balance: 1000, week: Math.floor(before.time.day / 7) });
+  for (const key of ['rel', 'memories', 'plans', 'messages', 'souvenirs', 'time', 'stats']) assert.deepEqual(upgraded[key], before[key]);
+  upgraded.pocketMoney.balance = 200;
+  assert.equal(migrateSave(upgraded).pocketMoney.balance, 200, 'migration does not reset spending');
+  assert.deepEqual(migrateSave(structuredClone(upgraded)), upgraded);
+});
+
 test('a migrated save builds a world with the same levels, and old Lv5 friends get the milestone', () => {
   const cls = { seed: 'fixture-seed', npcs: buildClass(DEFAULT_ROSTER, 'fixture-seed') };
   const w = new World(cls, migrateSave(fixture()));

@@ -56,6 +56,7 @@ function memoryCaption(m) {
   if (d.label?.en) return `${d.label.emoji || '⭐'} ${d.label.en.replace(/!$/, '')}`;
   if (m.type === 'event' && d.recall?.en) return `⭐ ${d.recall.en}`;
   if (m.act === 'cafe') return `☕ Café Komorebi${d.foodEn ? ` (${d.foodEn})` : ''}`;
+  if (m.act === 'mall') return `🛍️ Niji Mall${d.foodEn ? ` (${d.foodEn})` : ''}`;
   if (m.act === 'soccer') return '⚽ Soccer at Sakura Park';
   if (m.act === 'catch') return '⚾ Playing catch at the park';
   return `${ACT_INFO[m.act]?.emoji || '⭐'} ${ACT_INFO[m.act]?.en || 'Time together'}`;
@@ -519,14 +520,13 @@ export class Menus {
     for (const p of places) {
       const L = LOCATIONS[p.id];
       const friends = where.get(p.id) || [];
-      const b = el('button', { class: `mapspot${p.id === 'mall' ? ' soon' : ''}`, style: `left:${p.x}%;top:${p.y}%` }, [
+      const b = el('button', { class: 'mapspot', style: `left:${p.x}%;top:${p.y}%` }, [
         el('span', { class: 'mi' }, [p.icon]),
         el('b', {}, [L.en]),
         this.j ? el('small', {}, [L.ja]) : null,
         friends.length ? el('span', { class: 'mf' }, friends.slice(0, 4).map((n) => el('img', { src: this.game.portrait(n), alt: n.name, title: n.name }))) : null,
       ]);
       b.addEventListener('click', () => {
-        if (p.id === 'mall') { this.game.hud.toast({ icon: '🛍️', en: 'Niji Mall is opening soon!', ja: 'にじモールはもうすぐオープン！' }); return; }
         this.game.hud.setGoal({ icon: p.icon, en: `Go to ${L.en}`, ja: `${L.ja}へ行こう`, target: { ...p.target, label: L.en }, loc: p.id, temp: true });
         this.close();
       });

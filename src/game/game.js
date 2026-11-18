@@ -9,6 +9,7 @@ import { CameraRig } from '../engine/camera.js';
 import { buildTown } from '../engine/scenes/town.js';
 import { buildClassroom } from '../engine/scenes/classroom.js';
 import { buildCafe } from '../engine/scenes/cafe.js';
+import { buildMall } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
 import { souvenirMesh } from '../engine/food.js';
 import { DialogueUI } from '../dialogue/ui.js';
@@ -32,7 +33,7 @@ import { MORNING, AFTERNOON, EVENING } from '../world/time.js';
 import { migrateSave } from '../world/migrate.js';
 import { recoverInterrupted, snapshot, offerEvent, completeEvent } from '../world/friendship.js';
 
-const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, home: buildHome };
+const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome };
 const tmpV = new THREE.Vector3();
 
 export class Game {
@@ -165,6 +166,7 @@ export class Game {
       const scene = this.getScene(id);
       this.scene = scene;
       this.sceneId = id;
+      if (this.hud.manualGoal?.local && this.hud.manualGoal.loc !== id) this.hud.setGoal(null);
       this.extraInteract = [];
       this.sparkles = [];
       const amb = scene.ambience(this.world.period, this.world.weather, this.world.day);
@@ -305,7 +307,7 @@ export class Game {
       this.player.update(dt, this.input.axis(), true);
       this._updateTarget();
       const g = this.hud.manualGoal;
-      if (g?.temp && g.loc && this.locationId === g.loc) this.hud.setGoal(null);
+      if (g?.temp && g.loc && this.locationId === g.loc && (!g.local || Math.hypot(this.player.x - g.target.x, this.player.z - g.target.z) < 1.3)) this.hud.setGoal(null);
     } else if (mode === 'activity') {
       if (this.activityMove) this._laneMove(dt);
       else this.player.char.update(dt);
@@ -490,7 +492,14 @@ export class Game {
     sfx.click();
     switch (it.kind) {
       case 'door': return this._door(it);
-      case 'mall': this.hud.toast({ icon: '🛍️', en: 'Niji Mall: OPENING SOON!', ja: 'にじモールはもうすぐオープン！' }); w.logLine({ expr: 'a.soon', area: 'places', en: 'Opening soon!' }, 'heard'); return;
+      case 'mallShop': return this.activities.mallShop(it);
+      case 'mallFood': return this.activities.mallCounter(it);
+      case 'mallDirectory': {
+        const choice = await this.askSolo({ name: '🛍️ Niji Mall', color: '#2F9E9E', en: 'Three shops and four food counters. Where do you want to go?', ja: 'お店が3つ、食べもののお店が4つ。どこに行きたい？' }, [opt('shops', "Let's look at the shops!", 'お店を見よう！', { phrases: ['shops', 'look at the shops'], keys: [['shop']] }), opt('food', "Let's go to the food court!", 'フードコートに行こう！', { phrases: ['food court', 'food'], keys: [['food']] })]);
+        const target = this.scene.interact.find((t) => choice === 'shops' ? t.shop === 'toys' : t.counter === 'ramen');
+        this.hud.setGoal({ icon: choice === 'shops' ? '🛍️' : '🍜', en: `Go to ${target.label.en}`, ja: `${target.label.ja}へ行こう`, loc: 'mall', target: { x: target.x, z: target.z, label: target.label.en }, temp: true, local: true });
+        return;
+      }
       case 'board': return this.menus.open('board');
       case 'timetable': return this.menus.open('timetable');
       case 'journal': return this.menus.open('journal');
@@ -539,9 +548,9 @@ export class Game {
       this.hud.toast({ icon: '🌙', en: "It's late. Let's stay home tonight!", ja: 'もうおそいから、家にいよう！' });
       return;
     }
-    const spawn = { cafe: 'door', home: 'door', classroom: 'door' }[it.to];
+    const spawn = { cafe: 'door', mall: 'door', home: 'door', classroom: 'door' }[it.to];
     if (it.to === 'town') {
-      const from = { cafe: 'cafeDoor', home: 'homeDoor', classroom: 'schoolGate' }[this.sceneId] || 'crossroads';
+      const from = { cafe: 'cafeDoor', mall: 'mallDoor', home: 'homeDoor', classroom: 'schoolGate' }[this.sceneId] || 'crossroads';
       return this.enterScene('town', from);
     }
     return this.enterScene(it.to, spawn);
@@ -616,7 +625,7 @@ export class Game {
       if (unread) this.hud.toast({ icon: '📱', en: `You have ${unread} new message${unread > 1 ? 's' : ''}! Check the tablet on your desk.`, ja: '新しいメッセージ！つくえのタブレットを見てね。', ms: 4500 });
     } else {
       await this.hud.transition({ icon: '☀️', title: 'Afternoon', sub: 'More free time!', ja: '午後も自由時間！', ms: 1400 });
-      const spawnBack = { town: 'crossroads', cafe: 'door', home: 'center', classroom: 'door' }[this.sceneId];
+      const spawnBack = { town: 'crossroads', cafe: 'door', mall: 'door', home: 'center', classroom: 'door' }[this.sceneId];
       await this.enterScene(this.sceneId, this.sceneId === 'town' ? (this.locationId === 'park' ? 'park' : 'crossroads') : spawnBack, { fade: false });
     }
     this.setMode('explore');
@@ -656,11 +665,13 @@ export class Game {
       const choice = await this.dialogue.choose([
         opt('park', 'I want to go to the park.', '公園に行きたい。', { emoji: '🌸', keys: [['park']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go to ___.' }),
         opt('cafe', 'I want to go to the café.', 'カフェに行きたい。', { emoji: '☕', keys: [['cafe']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go to ___.' }),
+        opt('mall', 'I want to go to the mall.', 'モールに行きたい。', { emoji: '🛍️', keys: [['mall']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go to ___.' }),
         opt('home', 'I want to stay home.', '家にいたい。', { emoji: '🏠', keys: [['home', 'stay']], area: 'wantto', expr: 'a.wantstay', template: 'I want to ___.' }),
       ], { prompt: { name: '🌞 Saturday plans', color: '#2B8CFF', en: 'What do you want to do today?', ja: '今日は何をしたい？' } });
       w.logLine({ expr: 'a.wantgo', area: 'wantto', en: choice.option.en, template: 'I want to go to ___.' }, 'said');
       if (choice.option.id === 'park') this.hud.setGoal({ icon: '🌸', en: 'Go to Sakura Park', ja: 'さくら公園へ行こう', loc: 'park', temp: true });
       if (choice.option.id === 'cafe') this.hud.setGoal({ icon: '☕', en: 'Go to Café Komorebi', ja: 'カフェへ行こう', loc: 'cafe', temp: true });
+      if (choice.option.id === 'mall') this.hud.setGoal({ icon: '🛍️', en: 'Go to Niji Mall', ja: 'にじモールへ行こう', loc: 'mall', target: { x: 25, z: -14 }, temp: true });
       this.dialogue.close();
       this.camera.release();
       this.camera.configure(this.scene.camera, this.player.char, this.scene.collision);

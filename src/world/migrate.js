@@ -5,8 +5,9 @@
 // 2026-11-16, "Only one-on-one experiences open the next level").
 
 import { fstate } from './friendship.js';
+import { pocketMoney } from './mall.js';
 
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export function migrateSave(save) {
   if (!save || typeof save !== 'object') return save;
@@ -22,6 +23,7 @@ export function migrateSave(save) {
   if (!save.stats || typeof save.stats !== 'object') save.stats = { activities: 0 };
   if (!save.flags || typeof save.flags !== 'object') save.flags = { fd: 'done' };
   if (!save.time || typeof save.time !== 'object') save.time = { day: 0, period: 0 };
+  pocketMoney(save);
   fstate(save);
   if (!(save.version >= SAVE_VERSION)) save.version = SAVE_VERSION;
   return save;

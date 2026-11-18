@@ -11,7 +11,7 @@ const out = process.env.SHOTS_DIR || '.shots/perf';
 const { browser, page } = await launch();
 const H = harness(page, out);
 const { log, sleep, pump, settle, expect } = H;
-const BUDGET = { classroom: 150, town: 70, cafe: 90, home: 60 };
+const BUDGET = { classroom: 150, town: 70, cafe: 90, mall: 90, home: 60 };
 
 await page.goto(base + '/?autostart=sample&name=Mika');
 await page.waitForFunction(() => window.__esl && window.__esl.sceneId === 'classroom', null, { timeout: 30000 });
@@ -21,7 +21,7 @@ await settle();
 await page.evaluate(() => { const g = window.__esl; g.world.save.flags.fd = 'done'; for (const n of g.world.npcs) g.world.meet(n.id); g.hud.queue.length = 0; });
 
 const rows = [];
-for (const [scene, spawn, period] of [['classroom', 'door', 0], ['town', 'park', 1], ['cafe', 'door', 1], ['home', 'door', 1]]) {
+for (const [scene, spawn, period] of [['classroom', 'door', 0], ['town', 'park', 1], ['cafe', 'door', 1], ['mall', 'door', 1], ['home', 'door', 1]]) {
   await page.evaluate(async ({ scene, spawn, period }) => { const g = window.__esl; g.world.save.time.period = period; await g.enterScene(scene, spawn); }, { scene, spawn, period });
   await settle();
   await sleep(1500);

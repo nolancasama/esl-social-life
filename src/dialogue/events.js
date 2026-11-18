@@ -118,7 +118,7 @@ async function hangoutNow(c, actor) {
   if (r.id !== 'join') return true;
   await c.join(otherActor);
   await c.say(otherActor, sline(c, other, 'inviteYes'), { gesture: styleGesture(other, 'happy'), expr: 'happy' });
-  const v = { soccer: '⚽ Soccer', catch: '⚾ Playing catch', cafe: '☕ The café' }[act];
+  const v = { soccer: '⚽ Soccer', catch: '⚾ Playing catch', cafe: '☕ The café', mall: '🛍️ Niji Mall' }[act];
   if (!(await confirmTime(c, `${v} with ${npc.name} and ${other.name}?`, `${npc.name}と${other.name}といっしょに？`))) return true;
   const plan = w.addPlan({ npcIds: [npc.id, other.id], day: w.day, period: w.period, loc: ACT_INFO[act].loc, act, source: 'now' });
   c.result = { then: () => c.game.activities.run(act, [actor, otherActor], { plan }) };

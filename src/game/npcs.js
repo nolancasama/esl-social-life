@@ -98,9 +98,10 @@ export class NpcManager {
       const t = scene.teacherSpot;
       this._spawn({ npc: TEACHER, special: 'teacher', adult: true }, t.x, t.z, t.yaw, 'stand');
     }
-    if (sceneId === 'cafe' && !w.evening) {
+    if (['cafe', 'mall'].includes(sceneId) && !w.evening) {
       const s = scene.staffSpot;
-      this._spawn({ npc: STAFF, special: 'staff', adult: true }, s.x, s.z, s.yaw, 'stand');
+      const staff = sceneId === 'mall' ? { ...STAFF, name: 'Food Court', role: 'Food Court フードコート' } : STAFF;
+      this._spawn({ npc: staff, special: 'staff', adult: true }, s.x, s.z, s.yaw, 'stand');
     }
 
     // First day: the friend and the classmate they will introduce, side by side.
@@ -120,7 +121,7 @@ export class NpcManager {
         if (sceneId === 'town' && plan.loc === 'park') {
           const f = scene.field;
           this._spawn(e, f.b.x + k * 1.2 - (n - 1) * 0.6, f.b.z, 0, 'stand', { gesture: 'cheer', plan: true, prop: k === 0 && plan.act === 'soccer' ? 'ball' : k === 0 && plan.act === 'catch' ? 'baseball' : null });
-        } else if (sceneId === 'cafe') {
+        } else if (sceneId === 'cafe' || sceneId === 'mall') {
           const seat = scene.seats.find((s) => s.id === `T2-${[1, 3, 2][k] ?? 1}`) || scene.seats.find((s) => s.id === 'T2-1');
           this._spawn(e, seat.x, seat.z, seat.yaw, 'sit', { seatY: seat.seatY, plan: true });
         } else if (sceneId === 'home') {
@@ -129,6 +130,16 @@ export class NpcManager {
           this._placeSingle(e);
         }
       });
+    }
+
+    // Explicit hangouts reserve their pair and space before routine companions
+    // or a lost-item search can pull one of the friends away.
+    const hangouts = new Set(present.map((e) => e.slot.hangout).filter(Boolean));
+    for (const id of hangouts) {
+      const group = present.filter((e) => e.slot.hangout === id);
+      if (group.length !== 2) continue;
+      for (const e of group) take(e.n.id);
+      this._placeGroup(group);
     }
 
     // Lost item: the classmate is searching near the playground.

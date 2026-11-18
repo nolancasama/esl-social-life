@@ -154,6 +154,7 @@ export class HUD {
       if (g.loc && game.sceneId === 'town') {
         if (g.loc === 'park' && game.locationId !== 'park') target = { x: 14, z: 13, label: 'Sakura Park' };
         if (g.loc === 'cafe') target = { x: -12, z: 7.5, label: 'Café' };
+        if (g.loc === 'mall') target = { x: 25, z: -14, label: 'Niji Mall' };
       }
       if (g.target) target = g.target;
     }

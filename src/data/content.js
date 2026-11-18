@@ -296,7 +296,7 @@ export const LOCATIONS = {
   town: { en: 'Sakura Town', ja: 'さくら町', the: 'town', scene: 'town', zone: 'street', emoji: '🏘️', outdoor: true },
   home: { en: 'My House', ja: '自分の家', the: 'my house', scene: 'home', emoji: '🏠' },
   house: { en: 'Home', ja: '家', the: 'home', scene: null, emoji: '🏠' },
-  mall: { en: 'Niji Mall', ja: 'にじモール', the: 'the mall', scene: null, emoji: '🛍️' },
+  mall: { en: 'Niji Mall', ja: 'にじモール', the: 'the mall', scene: 'mall', emoji: '🛍️' },
   away: { en: 'Away', ja: 'おでかけ', the: 'away', scene: null, emoji: '🚌' },
 };
 

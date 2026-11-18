@@ -21,6 +21,7 @@
     "e2e:visits": "node scripts/run-e2e.mjs visits",
     "e2e:journey": "node scripts/run-e2e.mjs journey",
     "e2e:perf": "node scripts/run-e2e.mjs perf",
+    "e2e:mall": "node scripts/run-e2e.mjs mall",
     "e2e:friendship-all": "node scripts/run-e2e.mjs friendship hobby groups visits journey"
   },
   "dependencies": {
