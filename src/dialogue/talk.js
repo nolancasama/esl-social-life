@@ -17,7 +17,7 @@ import { sfx } from '../core/audio.js';
 import { bus } from '../core/events.js';
 import { DESTINATIONS } from '../world/directions.js';
 import { actVerb, jaLets, jaWant, jaInvite, confirmTime } from './common.js';
-import { friendshipMoment, deliveryHandoff, plannedEventFlow, playerIntro, sline, inviteHome } from './events.js';
+import { friendshipMoment, deliveryHandoff, plannedEventFlow, playerIntro, sline, inviteHome, askFriendHouse } from './events.js';
 import { memoryRefs, markReferenced, canOffer, offerEvent, completeEvent, openOffer, eligibleEvents, recordPlayerAnswer, playerAnswer } from '../world/friendship.js';
 import { styleGesture } from '../world/personality.js';
 import { FOODS, petPhrase, listEn } from '../data/content.js';
@@ -407,6 +407,9 @@ function topicList(c, actor, guide) {
   if (lvl >= 4 && !c.done.has('visit') && !openOffer(w.save, npc.id) && canOffer(w.save, w.day, 'home_visit')
     && eligibleEvents(w, npc.id, { available: new Set(['home_visit']) }).eligible.includes('home_visit')) {
     add({ id: 'visit', area: 'wantto', base: 2.8, card: opt('t-visit', 'Do you want to come to my house?', 'うちに遊びに来ない？', { emoji: '🏠', phrases: ['do you want to come to my house', 'come to my house'], keys: [['house', 'home']], expr: 'q.comehouse', area: 'wantto', template: 'Do you want to come to my house?' }), run: (cc, a) => inviteHome(cc, a) });
+  }
+  if (lvl >= 4 && !c.done.has('friendhouse') && !openOffer(w.save, npc.id) && canOffer(w.save, w.day, 'friend_house') && eligibleEvents(w, npc.id, { available: new Set(['friend_house']) }).eligible.includes('friend_house')) {
+    add({ id: 'friendhouse', area: 'wantto', base: 2.8, card: opt('t-friendhouse', 'Can I come to your house?', '家に遊びに行ってもいい？', { emoji: '🏡', phrases: ['can i come to your house', 'your house'], keys: [['house', 'home']], expr: 'q.cancome', area: 'wantto', template: 'Can I come to your house?' }), run: askFriendHouse });
   }
   // Introduce someone nearby that this NPC doesn't know.
   const intro = c.game.npcs.nearby(actor, 9).find((o) => w.isKnown(o.npc.id) && !o.busy && w.link(npc.id, o.npc.id) === 0 && [0, 1, 2].some((i) => w.knows(o.npc.id, `like:${i}`)));

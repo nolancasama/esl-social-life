@@ -1,9 +1,10 @@
 # Current State
 
-## Status (2026-11-18)
+## Status (2026-11-19)
 School-life expansion in progress on branch `school-life-expansion`. Part 1, Niji Mall
-(shops, food court, mall outings, save v3), is built and verified, not yet committed; see
-DESIGN_DECISIONS.md 2026-11-17. Parts 2-4 are next (Next Steps 4).
+(shops, food court, mall outings, save v3), is committed as `d078832`; see
+DESIGN_DECISIONS.md 2026-11-17. Part 2, visiting a friend's home, is implemented
+without a new save version; see the 2026-11-19 decision entry. Parts 3-4 are next.
 
 The Friendship Depth expansion (SPEC.md Part 2) is built: all three phases.
 Phase 1 covers behaviour styles, data-driven friendship events, level-dependent
@@ -15,6 +16,20 @@ built it directly at the user's request (no workers).
 Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-17): https://nolancasama.github.io/esl-social-life/. The automated suite is green; the remaining checks need a person (see Next Steps).
 
 ## What Exists
+- **Visiting a friend's home (2026-11-19):** Lv4+ friends invite by message or
+  in person, or the player asks “Can I come to your house?” in the topic menu.
+  The existing event cards handle acceptance, another day and decline; real
+  schedules explain busy replies. A booked host waits at the blue-roof neighbour
+  north of the player's home, with map/goal directions. The door confirms the
+  one-free-period cost; without a current plan it offers a friendly not-now card.
+  One shared dollhouse interior derives wall colour, exact pet type/count and
+  interest props from existing generated data. Greeting, room tour, optional pet
+  counting, juice offer, one drawing/music/racing/photo activity and goodbye all
+  use Japanese-hinted cards. Hobby Session and racing are reused. The existing
+  personal-event path awards 12 XP once, stores a journal/recall memory focused
+  on the host, advances one period and returns to the same pavement. Reloading
+  an unfinished visit keeps a replayable plan without awarding partial rewards.
+  The viewer and 90-call café/mall perf budget include `friendhouse`.
 - **Niji Mall (2026-11-17):** the town door opens a new indoor scene with an
   entrance planter/directory, three shops with nine round-yen purchases, four
   food counters and shared four-seat tables. Saved weekly pocket money cannot
@@ -48,7 +63,27 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - **Save version 3** (`world/migrate.js`, idempotent, run in the Game constructor). Version 1/2 saves keep every level, XP value and memory.
 - **Test hooks:** `window.__esl.friendship` (a frozen snapshot) and `window.__esl.friendshipDebug` (offer / complete / approach). Styles are not in the debug panel.
 
-## Verification (observed 2026-11-18, headless Chrome + SwiftShader, 1366×768)
+## Verification (observed 2026-11-19, headless Chrome + SwiftShader, 1366×768)
+- `npm test` 72/72 PASS, including nine new personalisation/lifecycle/message tests.
+- `npm run e2e` PASS: playthrough, scenarios and mocked speech. The initial
+  attempt was interrupted by Vite hot reloads during source edits; the clean
+  run passed with source frozen.
+- `npm run e2e:friendhouse` PASS: real invitation cards, walking along the
+  residential lane, normal door action and time confirmation, greeting, pet,
+  snack, racing, goodbye, exact one-period advance, 12 event XP, one personal
+  memory, journal timeline, same-door pavement return and duplicate completion
+  after reload. It also reloads at the greeting, verifies no partial rewards or
+  time cost, then walks back and completes the same scheduled visit.
+- Harness trust proof: the known-good friend-house run exited 0; changing its
+  greeting selector to `.dlg-en.friendhouse-deliberately-broken` produced the
+  expected exit 1 (15-second timeout). The selector was restored. Negative
+  proof screenshots use a separate external directory.
+- Five friend-house screenshots (town door, greeting, pet, activity, goodbye):
+  `C:\Users\nolan\AppData\Local\Temp\esl-friendhouse-2026-11-19\`.
+  Door and pet frames inspected for readable English/Japanese and visible host,
+  player and generated pet. Claude retains final aesthetic review.
+
+### Prior verification (2026-11-18, headless Chrome + SwiftShader, 1366×768)
 - `npm test` 63/63 PASS; `npm run build` PASS.
 - Full suite on the final mall code: playthrough, scenarios, speech, friendship, hobby, visits, journey and mall PASS; groups PASS 4/4 after the hangout-report priority fix (below).
 - `e2e:mall` proven trusted: known-good pass plus a deliberately broken selector failing with exit 1 (reverted). It covers the town door, a ¥500 purchase, a solo food order, a phone-composed two-friend meal (`focus: []`), exact XP, the exit spawn and the bedroom souvenir.
@@ -64,13 +99,17 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - Characters walk in straight lines; soft approaches are skipped when the walk is not clear. No pathfinding.
 - Several e2e scripts use debug hooks to reach late-game content quickly; the journey script plays the natural path.
 - Bubbles over characters are English only; the Japanese hint appears once you talk.
-- Not built yet in this expansion: visiting a friend's home, specialist classrooms and the school day, music (queued, see Next Steps).
+- Not built yet in this expansion: specialist classrooms and the school day,
+  music (queued, see Next Steps).
 
 ## Next Steps
 1. Play on a classroom Chromebook: frame rate with groups and visits, touch on the composer cards, read-aloud quality.
 2. Playtest pacing: how many days to Lv3, Lv4 and Lv5 with one-on-one memories; whether 2 event offers a day feels right; whether soft approaches feel welcome rather than intrusive.
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
-4. School-life expansion (user asked for all four, 2026-11-17), in this order on branch `school-life-expansion`: Niji Mall (done), visiting a friend's home, school day with specialist classrooms, music. Each has its own e2e script and a full-suite run before the next starts.
+4. School-life expansion (user asked for all four, 2026-11-17), in this order on branch `school-life-expansion`: Niji Mall (done, `d078832`), visiting a friend's home (done), then:
+   - **Part 3, school day and specialist classrooms:** a music room, gym and art room. On days the timetable has music, P.E. or art, the morning lesson happens in that room as a short pair activity with a different classmate each time (music: rhythm game; P.E.: ball play; art: drawing canvas). New lines such as "What do you have today?" / "I have P.E. and math." Lesson memories are capped so pair work cannot level up friendships.
+   - **Part 4, music:** gentle background music generated in the browser (no audio files), a different loop per place; pauses while the mic is listening and ducks during read-aloud; a music volume setting plus a default in Teacher Setup.
+   Each part has its own e2e script and a full-suite run before the next starts.
 
 ## Codex / Delegated Work
-Niji Mall was built by Codex and reviewed by Claude (diff, screenshots, full suite rerun by Claude). The hangout-report priority rule was a direct Claude edit. No pending worker output. The mall work is uncommitted on `school-life-expansion` (commit when the user asks).
+Niji Mall was built by Codex and reviewed by Claude (diff, screenshots, full suite rerun by Claude), then committed as `d078832`. The hangout-report priority rule was a direct Claude edit. Codex implemented the friend's-home part (run timed out during final validation); Claude reviewed the diff, made the cat model read as a cat (pointed ears, whiskers, upright tail instead of a curled shiba tail), reran the full suite (unit + 9 e2e suites, all PASS, perf friendhouse 13/90 draw calls) and committed it. No pending worker output.

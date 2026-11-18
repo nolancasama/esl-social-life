@@ -11,6 +11,7 @@ import { buildClassroom } from '../engine/scenes/classroom.js';
 import { buildCafe } from '../engine/scenes/cafe.js';
 import { buildMall } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
+import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
 import { souvenirMesh } from '../engine/food.js';
 import { DialogueUI } from '../dialogue/ui.js';
 import { talkToNpc } from '../dialogue/talk.js';
@@ -31,9 +32,11 @@ import * as store from '../core/store.js';
 import { LOCATIONS, DAYS, MONTHS, WEATHER, TIMETABLE, SUBJECTS, timeWords, timeJa, ordinal } from '../data/content.js';
 import { MORNING, AFTERNOON, EVENING } from '../world/time.js';
 import { migrateSave } from '../world/migrate.js';
-import { recoverInterrupted, snapshot, offerEvent, completeEvent } from '../world/friendship.js';
+import { recoverInterrupted, snapshot, offerEvent, completeEvent, instance, npcFree } from '../world/friendship.js';
+import { runEvent, eventTitle } from '../dialogue/events.js';
+import { confirmTime } from '../dialogue/common.js';
 
-const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome };
+const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse };
 const tmpV = new THREE.Vector3();
 
 export class Game {
@@ -145,8 +148,13 @@ export class Game {
   }
 
   getScene(id) {
+    if (id === 'friendhouse' && this.scenes[id]?.hostId !== this.friendHouseNpc?.id) {
+      this.scenes[id]?.dispose?.();
+      delete this.scenes[id];
+    }
     if (!this.scenes[id]) {
-      this.scenes[id] = BUILDERS[id]({ shadows: this.renderer.shadows, playerName: this.world.save.player.name });
+      this.scenes[id] = BUILDERS[id]({ shadows: this.renderer.shadows, playerName: this.world.save.player.name, seed: this.cls.seed, npc: this.friendHouseNpc });
+      if (id === 'friendhouse') this.scenes[id].hostId = this.friendHouseNpc?.id;
     }
     return this.scenes[id];
   }
@@ -492,6 +500,7 @@ export class Game {
     sfx.click();
     switch (it.kind) {
       case 'door': return this._door(it);
+      case 'friendhouse': return this._friendHouseDoor();
       case 'mallShop': return this.activities.mallShop(it);
       case 'mallFood': return this.activities.mallCounter(it);
       case 'mallDirectory': {
@@ -550,10 +559,30 @@ export class Game {
     }
     const spawn = { cafe: 'door', mall: 'door', home: 'door', classroom: 'door' }[it.to];
     if (it.to === 'town') {
-      const from = { cafe: 'cafeDoor', mall: 'mallDoor', home: 'homeDoor', classroom: 'schoolGate' }[this.sceneId] || 'crossroads';
+      const from = { cafe: 'cafeDoor', mall: 'mallDoor', home: 'homeDoor', friendhouse: 'friendHouseDoor', classroom: 'schoolGate' }[this.sceneId] || 'crossroads';
       return this.enterScene('town', from);
     }
     return this.enterScene(it.to, spawn);
+  }
+
+  async _friendHouseDoor() {
+    const w = this.world;
+    const plan = w.plansNow().find((p) => p.loc === 'friendhouse' && p.eventId);
+    const inst = plan && instance(w.save, plan.eventId);
+    if (!w.free || !inst || inst.template !== 'friend_house' || inst.status !== 'scheduled') {
+      return this.askSolo({ name: '🏡', color: '#70ABA4', en: "Not now. Let's make a plan with a close friend!", ja: '今はお休み。仲よしの友達と約束してから来よう！' }, [opt('ok', 'OK! See you later!', 'うん！また今度ね！', { phrases: ['ok', 'see you later'], keys: [['ok', 'later']] })]);
+    }
+    if (!npcFree(w, inst.npcId, w.day, w.period, plan.id)) return;
+    const npc = w.npc(inst.npcId);
+    if (!npc) return;
+    const actor = this.npcs.actorFor(npc.id) || this.npcs.ensure(npc, this.player.x - 0.6, this.player.z + 1, Math.PI / 2);
+    const c = await Conversation.start(this, [actor]);
+    let enter = false;
+    try {
+      const t = eventTitle(w, inst);
+      enter = await confirmTime(c, `${t.emoji} ${t.en}?`, `${t.ja}？`);
+    } finally { await c.end(); }
+    if (enter) await runEvent(this, actor, inst.id);
   }
 
   async _desk() {

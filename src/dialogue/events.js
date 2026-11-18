@@ -20,6 +20,8 @@ import { hangoutToReport, pastPhrase, joinableActivity } from '../world/social.j
 import { actPhrase } from '../world/schedule.js';
 import { ACT_INFO } from '../game/world.js';
 import { playVisit } from '../activities/visit.js';
+import { playFriendHouse } from '../activities/friendhouse.js';
+import { busyReason } from './outing.js';
 
 export const FLOWS = {};
 export function registerFlow(id, flow) { FLOWS[id] = flow; }
@@ -168,11 +170,15 @@ async function mentionPlan(c, actor, inst) {
  * card), "How about ___?" (the next slot where both are free), or "Maybe
  * next time." (no penalty). Returns 'now' | 'later' | 'no' | 'wait'.
  */
-export async function arrange(c, actor, inst, { loc, act = inst.template, nowLabel = null }) {
+export async function arrange(c, actor, inst, { loc, act = inst.template, nowLabel = null, atDoor = false }) {
   const w = c.world, game = c.game, npc = actor.npc;
-  const freeNow = w.free && F.playerFree(w, w.day, w.period);
+  const freeNow = w.free && F.playerFree(w, w.day, w.period) && (!atDoor || F.npcFree(w, npc.id, w.day, w.period));
+  if (atDoor && w.free && !F.npcFree(w, npc.id, w.day, w.period)) {
+    const why = busyReason(w, npc, w.day, w.period);
+    if (why) await c.say(actor, line(why.en, why.ja));
+  }
   const from = freeNow ? (w.period === 0 ? { d: w.day, p: 1 } : { d: w.day + 1, p: 0 }) : { d: w.day, p: w.period };
-  const later = F.nextEventSlot(w, [npc.id], { fromDay: from.d, fromPeriod: from.p });
+  const later = F.nextEventSlot(w, [npc.id], { fromDay: from.d, fromPeriod: from.p, weekendFirst: atDoor });
   const opts = [];
   if (freeNow) {
     opts.push(opt('now', nowLabel?.en || "Let's go now!", nowLabel?.ja || '今から行こう！', {
@@ -208,7 +214,14 @@ export async function arrange(c, actor, inst, { loc, act = inst.template, nowLab
     await c.say(actor, line("OK! Let's do it another time!", 'オッケー！また今度やろうね！'), { expr: 'happy' });
     return 'wait';
   }
-  F.scheduleEvent(w, inst.id, { day: w.day, period: w.period, loc, act });
+  const plan = F.scheduleEvent(w, inst.id, { day: w.day, period: w.period, loc, act });
+  if (!plan) return 'wait';
+  if (atDoor) {
+    await c.say(actor, line("I'll wait outside my house!", '家の外で待っているね！'), { expr: 'happy' });
+    await c.ask([opt('meet', 'See you there!', 'そこで会おう！', { phrases: ['see you there'], keys: [['see', 'there']] })]);
+    c.result = { planned: plan, then: () => { game.npcs.populate(); game.hud.refresh(); game.save(); } };
+    return 'now';
+  }
   c.result = { then: () => runEvent(game, actor, inst.id) };
   return 'now';
 }
@@ -228,6 +241,12 @@ export async function plannedEventFlow(c, actor, plan) {
   const inst = F.instance(w.save, plan.eventId);
   if (!inst || inst.status !== 'scheduled') return false;
   const t = eventTitle(w, inst);
+  if (inst.template === 'friend_house') {
+    await c.say(actor, line("Let's go inside! Use my house door.", '家に入ろう！家のドアから入ってね。'), { gesture: styleGesture(actor.npc, 'happy'), expr: 'happy' });
+    await c.ask([opt('door', "OK! Let's go!", 'うん！行こう！', { phrases: ['ok', 'lets go'], keys: [['ok', 'go']] })]);
+    c.result = { planned: plan };
+    return true;
+  }
   const hello = inst.template === 'home_visit'
     ? line("Hi! I'm here! 🏠 Thank you for inviting me!", '来たよ！さそってくれてありがとう！', { area: 'wantto' })
     : line(`You came! ${t.emoji} I'm so happy!`, '来てくれた！すごくうれしい！', { area: 'wantto' });
@@ -552,6 +571,24 @@ export async function inviteHome(c, actor) {
   const inst = F.offerEvent(w, { template: 'home_visit', npcId: actor.npc.id, data: { invitedBy: 'player' } });
   await c.say(actor, line('Your house? Yes! I want to see your room!', 'あなたの家？うん！部屋を見てみたい！', { area: 'wantto' }), { gesture: styleGesture(actor.npc, 'happy'), expr: 'happy' });
   await FLOWS.home_visit.pitch(c, actor, inst, { invited: true });
+}
+
+// The inverse visit: accepting makes a plan; the town door starts the visit.
+registerFlow('friend_house', {
+  title(world, inst) { const n = world.npc(inst.npcId)?.name || ''; return { en: `Visiting ${n}'s house`, ja: `${n}の家に遊びに行く`, emoji: '🏡' }; },
+  async pitch(c, actor, inst, { invited = false } = {}) {
+    await c.say(actor, sline(c, actor.npc, invited ? 'inviteYes' : 'invitePre'), { gesture: styleGesture(actor.npc, 'happy'), expr: 'happy' });
+    if (!invited) await c.say(actor, line('Do you want to come to my house?', 'うちに遊びに来ない？', { area: 'wantto', expr: 'q.comehouse', template: 'Do you want to come to my house?' }));
+    await arrange(c, actor, inst, { loc: 'friendhouse', act: 'friendhouse', atDoor: true, nowLabel: { en: "Yes! Let's go now!", ja: 'うん！今から行こう！' } });
+  },
+  run: (game, actor, inst, plan) => game.activities.run('friendhouse', [actor], { plan, event: inst, play: (g, as) => playFriendHouse(g, as[0]) }),
+});
+
+export async function askFriendHouse(c, actor) {
+  const w = c.world;
+  if (!F.canOffer(w.save, w.day, 'friend_house') || !F.eligibleEvents(w, actor.npc.id, { available: new Set(['friend_house']) }).eligible.includes('friend_house')) return;
+  const inst = F.offerEvent(w, { template: 'friend_house', npcId: actor.npc.id, data: { invitedBy: 'player' } });
+  await FLOWS.friend_house.pitch(c, actor, inst, { invited: true });
 }
 
 // ---------------------------------------------------------------- meet request ("Can you introduce us?")

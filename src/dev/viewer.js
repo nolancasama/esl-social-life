@@ -1,4 +1,4 @@
-// Dev-only scene viewer: /?view=town|classroom|cafe|mall|home[&cam=x,y,z,lx,ly,lz]
+// Dev-only scene viewer: /?view=town|classroom|cafe|mall|home|friendhouse[&cam=x,y,z,lx,ly,lz]
 // Renders a scene with a few sample characters so visuals can be checked in
 // isolation (used by scripts/shots.mjs).
 
@@ -10,21 +10,23 @@ import { buildClassroom } from '../engine/scenes/classroom.js';
 import { buildCafe } from '../engine/scenes/cafe.js';
 import { buildMall } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
+import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
 import { buildClass } from '../world/generator.js';
 import { DEFAULT_ROSTER } from '../data/roster.js';
 
 export function runViewer(which, params) {
   const stage = document.getElementById('stage');
   const r = new Renderer(stage);
-  const builders = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome };
-  const scene = (builders[which] || buildTown)({ playerName: 'Ken' });
+  const npcs = buildClass(DEFAULT_ROSTER, 'viewer');
+  const builders = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse };
+  const host = npcs[Number(params.get('friend') || 0)] || npcs[0];
+  const scene = (builders[which] || buildTown)({ playerName: 'Ken', seed: 'viewer', npc: host });
   const period = Number(params.get('period') || 0);
   const weather = params.get('weather') || 'sunny';
   r.setWorld(scene.root, scene.ambience(period, weather, 0));
-  const npcs = buildClass(DEFAULT_ROSTER, 'viewer');
   const chars = [];
   const spots = scene.spots.slice(0, 12);
-  npcs.slice(0, spots.length).forEach((n, i) => {
+  (which === 'friendhouse' ? [host] : npcs).slice(0, spots.length).forEach((n, i) => {
     const c = new Character(n.look, { id: n.id });
     const s = spots[i];
     c.setPosition(s.x, s.z);

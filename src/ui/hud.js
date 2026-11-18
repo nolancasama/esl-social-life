@@ -11,6 +11,7 @@ import { hearts } from '../dialogue/runner.js';
 import { ACT_INFO } from '../game/world.js';
 import { instance, openOffers } from '../world/friendship.js';
 import { eventTitle } from '../dialogue/events.js';
+import { FRIEND_HOUSE_DOOR } from '../world/friendhouse.js';
 
 /** What a plan is called: its friendship event's title, or the activity. */
 function planInfo(w, plan) {
@@ -120,6 +121,11 @@ export class HUD {
     if (fd === 'start' && ff) return { icon: '💬', en: `Talk to ${ff.name}`, ja: `${ff.name}に話しかけよう`, npc: ff.id };
     if (fd === 'introduced' && intro) return { icon: '💬', en: `Ask ${intro.name} about Saturdays, then invite ${intro.name}!`, ja: `${intro.name}に土曜日のことを聞いて、さそってみよう！`, npc: intro.id };
     const plan = w.upcomingPlans()[0];
+    if (plan?.loc === 'friendhouse') {
+      const n = w.npc(plan.npcIds[0]);
+      const now = plan.day === w.day && plan.period === w.period;
+      return { icon: '🏡', en: now ? `Visit ${n.name}! Go to the house door.` : `Visit ${n.name}: ${DAYS[((plan.day % 7) + 7) % 7].en}`, ja: now ? `${n.name}の家のドアへ行こう！` : `${n.name}の家に遊びに行く約束`, loc: 'friendhouse', target: { ...FRIEND_HOUSE_DOOR, label: `${n.name}'s house` } };
+    }
     if (plan && plan.day === w.day) {
       const n = w.npc(plan.npcIds[0]);
       const a = planInfo(w, plan);

@@ -34,12 +34,14 @@ function sline(npc, key, name) {
 /** Seat or stand the player and friend for a variant; returns the friend's actor. */
 async function stage(game, actor, where) {
   const w = game.world;
-  const needScene = where === 'cafe' ? 'cafe' : 'town';
+  const needScene = where === 'friendhouse' ? 'friendhouse' : where === 'cafe' ? 'cafe' : 'town';
   if (game.sceneId !== needScene) await game.enterScene(needScene, needScene === 'cafe' ? 'door' : 'park');
   const scene = game.scene;
   const P0 = game.player;
   let pA, pB, sit = false;
-  if (where === 'cafe') {
+  if (where === 'friendhouse') {
+    [pA, pB] = scene.activitySeats; sit = true;
+  } else if (where === 'cafe') {
     pA = scene.seats.find((s) => s.id === 'T2-0'); pB = scene.seats.find((s) => s.id === 'T2-1'); sit = true;
   } else if (where === 'bench') {
     pA = scene.spots.find((s) => s.id === 'pb2a'); pB = scene.spots.find((s) => s.id === 'pb2b'); sit = true;
@@ -158,7 +160,7 @@ function sketchbook(game, names) {
 async function playDraw(game, actor, { project = null }) {
   const w = game.world;
   const name = w.save.player.name;
-  const where = game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'bench';
+  const where = game.sceneId === 'friendhouse' ? 'friendhouse' : game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'bench';
   const { a, sit } = await stage(game, actor, where);
   const npc = a.npc;
   a.char.setProp('sketch');
@@ -173,7 +175,7 @@ async function playDraw(game, actor, { project = null }) {
     await c.say(a, line('What do you want to draw?', '何をかきたい？', { area: 'wantto', expr: 'q.wantdraw', template: 'What do you want to draw?' }));
   } else {
     await c.say(a, line("Let's draw together! What do you want to draw?", 'いっしょに絵をかこう！何をかきたい？', { area: 'wantto', expr: 'q.wantdraw', template: 'What do you want to draw?' }), { gesture: styleGesture(npc, 'happy'), expr: 'happy' });
-    subjects = shuffle(DRAW_SUBJECTS[where === 'cafe' ? 'cafe' : 'park']).slice(0, 3);
+    subjects = shuffle(DRAW_SUBJECTS[where === 'friendhouse' || where === 'cafe' ? 'cafe' : 'park']).slice(0, 3);
   }
   const sChoice = await c.ask(subjects.map((s, i) => opt(`s${i}`, `I want to draw ${s.en}.`, `${s.ja}をかきたい。`, {
     emoji: s.emoji, keys: [[s.en.split(' ').pop()]], phrases: [`i want to draw ${s.en}`, s.en], area: 'wantto', expr: 'a.wantdraw', template: 'I want to draw ___.',
@@ -393,7 +395,7 @@ async function playMusic(game, actor, { like, practice = false }) {
   const w = game.world;
   const name = w.save.player.name;
   const m = MUSIC[like] || MUSIC.music;
-  const where = game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'field';
+  const where = game.sceneId === 'friendhouse' ? 'friendhouse' : game.sceneId === 'cafe' || w.weather === 'rainy' ? 'cafe' : 'field';
   const { a, sit } = await stage(game, actor, where);
   const npc = a.npc;
   const c = new Conversation(game, [a]);

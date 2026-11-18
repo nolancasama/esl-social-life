@@ -17,12 +17,12 @@ import { wait } from '../core/util.js';
 import { bus } from '../core/events.js';
 import { guideVisitor } from './directions.js';
 import { playMilestone } from './milestone.js';
-import { startEvent, completeEvent, offerEvent } from '../world/friendship.js';
+import { startEvent, completeEvent, offerEvent, endEvent } from '../world/friendship.js';
 import { eventTitle, FLOWS } from '../dialogue/events.js';
 import { makeId } from '../core/util.js';
 
 // Shelf souvenirs for friendship events (engine/food.js draws them).
-const EVENT_SOUVENIR = { special_day: 'party', best_friend: 'keepsake', practice: 'medal', project: 'card', home_visit: 'visit' };
+const EVENT_SOUVENIR = { special_day: 'party', best_friend: 'keepsake', practice: 'medal', project: 'card', home_visit: 'visit', friend_house: 'visit' };
 const VARIANT_SOUVENIR = { draw: 'drawing', spot: 'nature', music: 'music' };
 
 function eventSouvenir(event, act, result) {
@@ -38,6 +38,7 @@ function eventThanks(event, w, result) {
   if (event.template === 'special_day') return ['Thank you for the party! It was so much fun! 🎉', 'パーティー、ありがとう！すごく楽しかった！'];
   if (event.template === 'practice') return ['Thank you for helping me practice! 💪', '練習を手伝ってくれてありがとう！'];
   if (event.template === 'home_visit') return ['Thank you for inviting me to your house! I had fun! 🏠', '家にさそってくれてありがとう！楽しかった！'];
+  if (event.template === 'friend_house') return ['Thank you for coming to my house! See you at school! 🏡', '家に遊びに来てくれてありがとう！学校で会おうね！'];
   if (event.template === 'project') { const r = w.npc(event.data.recipient); return [`Let's give our card to ${r?.name || 'our friend'}! 💌`, `${r?.name || ''}にカードをわたそうね！`]; }
   if (v === 'draw') return ['Thank you for drawing with me! 🎨', 'いっしょに絵をかいてくれてありがとう！'];
   if (v === 'spot') return ['That was a fun adventure! Thank you! 🐞', '楽しいぼうけんだったね！ありがとう！'];
@@ -82,6 +83,7 @@ export class Activities {
   async run(act, actors, { plan = null, like = null, event = null, variant = null, play = null } = {}) {
     const game = this.game;
     const w = game.world;
+    if (event?.template === 'friend_house' && event.status !== 'scheduled') return;
     game.setMode('activity');
     game.hud.setActivity(true);
     if (event) startEvent(w.save, event.id);
@@ -100,6 +102,21 @@ export class Activities {
     game.activityHud.hide();
     game.activityTick = null;
     game.activityMove = null;
+    if (event?.template === 'friend_house' && result?.error) {
+      endEvent(w.save, event.id);
+      game.player.char.setProp(null);
+      game.player.char.setBase('idle');
+      game.sitting = false;
+      game.hud.setActivity(false);
+      await game.enterScene('town', 'friendHouseDoor');
+      game.setMode('explore');
+      game.save(true);
+      return;
+    }
+    // The door/scene transition saved the unfinished plan. Keep that snapshot
+    // until the result card is dismissed and advanceTime saves reward + time
+    // together. A reload on the result card can replay, never keep free XP.
+    if (event?.template === 'friend_house') clearTimeout(game.saveTimer);
     // Rewards: connection, memory, souvenir, thank-you message.
     const ids = actors.map((a) => a.npc.id);
     const before = Object.fromEntries(ids.map((id) => [id, w.level(id)]));
@@ -142,6 +159,7 @@ export class Activities {
     await game.hud.results({ act, title: info, npcs: actors.map((a) => a.npc), before, result, souvenir, photo: result.photo });
     game.npcs.restoreArea();
     await game.advanceTime({ reason: 'activity' });
+    if (event?.template === 'friend_house') await game.enterScene('town', 'friendHouseDoor');
   }
 
   // ------------------------------------------------------------ lost item search (no time cost)

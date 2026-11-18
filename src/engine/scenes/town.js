@@ -3,6 +3,7 @@
 // the player's house. Coordinates: x east, z south, metres.
 
 import * as THREE from 'three';
+import { FRIEND_HOUSE_DOOR } from '../../world/friendhouse.js';
 import { StaticBuilder, G } from '../builder.js';
 import { CollisionWorld } from '../collision.js';
 import { vertexMaterial } from '../materials.js';
@@ -262,6 +263,7 @@ export function buildTown({ shadows = false, playerName = '' } = {}) {
   roof(resi, -21.5, 1.6, 37.0, 1.9, 0.7, 1.6, '#5B6270');
   resi.box(1.8, 0.4, 1.4, PAL.stone, -21.5, 0, 37.0);
   interact.push({ id: 'homeDoor', x: H.door[0] + 0.2, z: H.door[1], r: 1.6, kind: 'door', to: 'home', icon: '🏠', label: { en: 'My house', ja: '自分の家' } });
+  interact.push({ id: 'friendHouse', x: FRIEND_HOUSE_DOOR.x, z: FRIEND_HOUSE_DOOR.z, r: 1.5, kind: 'friendhouse', icon: '🏡', label: { en: "Friend's house", ja: '友達の家' } });
 
   // ---------------------------------------------------------------- street furniture
   const polesS = [-38, -27, -16, 9, 20, 31];
@@ -399,6 +401,7 @@ export function buildTown({ shadows = false, playerName = '' } = {}) {
   };
 
   const spawns = {
+    friendHouseDoor: { x: -22, z: FRIEND_HOUSE_DOOR.z, yaw: Math.PI / 2 },
     schoolGate: { x: -23.4, z: -8.6, yaw: 0 },
     schoolDoor: { x: SX, z: -19.8, yaw: 0 },
     cafeDoor: { x: CX, z: 6.2, yaw: Math.PI },

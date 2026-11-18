@@ -13,7 +13,7 @@ import { validPairs } from '../world/directions.js';
 import { isVisibleLoc } from '../world/generator.js';
 import { onPlanMissed, expireOld, lostItemFor, npcFree, canOffer, eligibleEvents, offerEvent, nextEventSlot } from '../world/friendship.js';
 
-const VISIT_ONLY = new Set(['home_visit']);
+const VISIT_ONLY = new Set(['home_visit', 'friend_house']);
 import { scheduleHangout, settleHangouts } from '../world/social.js';
 import { styleData } from '../world/personality.js';
 
@@ -266,18 +266,23 @@ export class World {
     const vRng = new RNG(`${this.cls.seed}|${this.save.id}|visit|${this.day}`);
     for (const n of vRng.shuffle(this.npcs.filter((x) => this.level(x.id) >= 4))) {
       if (!canOffer(this.save, this.day, 'home_visit')) break;
-      if (!eligibleEvents(this, n.id, { available: VISIT_ONLY }).eligible.includes('home_visit')) continue;
+      const eligible = eligibleEvents(this, n.id, { available: VISIT_ONLY }).eligible;
+      if (!eligible.length) continue;
       if (!vRng.chance(0.18 * (0.6 + 0.8 * styleData(n).initiative.message))) continue;
       const slot = nextEventSlot(this, [n.id], { fromDay: this.day + 1, fromPeriod: 0, weekendFirst: vRng.chance(0.6) });
       if (!slot) continue;
-      const inst = offerEvent(this, { template: 'home_visit', npcId: n.id, data: {} });
+      // Preserve the established request stream. The inverse invitation uses
+      // the same initiative roll while that request rests on its cooldown.
+      const template = eligible.includes('home_visit') ? 'home_visit' : 'friend_house';
+      const visiting = template === 'friend_house';
+      const inst = offerEvent(this, { template, npcId: n.id, data: {} });
       const D = DAYS[dow(slot.day)];
       const tomorrow = slot.day === this.day + 1;
       this.addMessage({
         from: n.id, kind: 'invite',
-        en: `Can I come to your house ${tomorrow ? 'tomorrow' : `on ${D.en}`}? I want to see your room! 🏠`,
-        ja: `${tomorrow ? 'あした' : `${D.ja}に`}家に遊びに行ってもいい？部屋を見てみたいな！`,
-        invite: { act: 'visit', loc: 'home', day: slot.day, period: slot.period, status: 'pending', eventId: inst.id },
+        en: visiting ? `Do you want to come to my house? ${tomorrow ? 'Tomorrow' : D.en}? One free period. 🏡` : `Can I come to your house ${tomorrow ? 'tomorrow' : `on ${D.en}`}? I want to see your room! 🏠`,
+        ja: visiting ? `うちに遊びに来ない？${tomorrow ? 'あした' : D.ja}はどう？自由時間を1つ使うよ。` : `${tomorrow ? 'あした' : `${D.ja}に`}家に遊びに行ってもいい？部屋を見てみたいな！`,
+        invite: { act: visiting ? 'friendhouse' : 'visit', loc: visiting ? 'friendhouse' : 'home', day: slot.day, period: slot.period, status: 'pending', eventId: inst.id },
       });
       break;
     }

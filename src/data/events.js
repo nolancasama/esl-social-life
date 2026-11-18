@@ -21,6 +21,7 @@ export const TEMPLATES = {
   group_outing: { id: 'group_outing', kind: 'group', minLevel: 2, cost: 'period', phase: 2, cooldownDays: 0, xp: 6, memoryType: 'activity', focus: 'none', areas: ['wantto', 'weekly'], places: ['park', 'cafe'], emoji: '🧑‍🤝‍🧑' },
   npc_hangout: { id: 'npc_hangout', kind: 'network', minLevel: 2, cost: 'none', phase: 2, cooldownDays: 4, xp: 0, memoryType: null, focus: 'none', areas: ['intro'], places: ['park', 'cafe'], emoji: '👫' },
   home_visit: { id: 'home_visit', kind: 'home', minLevel: 4, cost: 'period', phase: 3, cooldownDays: 7, xp: 12, memoryType: 'event', focus: 'npc', areas: ['possessions', 'wantto'], places: ['home'], emoji: '🏠' },
+  friend_house: { id: 'friend_house', kind: 'home', minLevel: 4, cost: 'period', cooldownDays: 7, xp: 12, memoryType: 'event', focus: 'npc', areas: ['possessions', 'wantto', 'food'], places: ['friendhouse'], emoji: '🏡' },
 };
 
 export const TEMPLATE_IDS = Object.keys(TEMPLATES);

@@ -1,6 +1,7 @@
 // Runs e2e scripts against a Vite dev server that this runner starts and stops.
 //   node scripts/run-e2e.mjs playthrough [scenarios speech ...]
 //   npm run e2e:mall — town entrance, shopping, food court and phone outing
+//   npm run e2e:friendhouse — a close friend's house invitation, door and visit
 // Each name maps to scripts/<name>.mjs and receives BASE. If BASE is already
 // set, no server is started (the scripts use that server instead).
 // Exit code: 0 when every script passed, otherwise the first failing code;

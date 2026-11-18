@@ -41,7 +41,7 @@ export const STYLES = {
     approach: [S('{name}! Hi, hi!', '{name}！やあやあ！'), S('{name}! Wait for me!', '{name}！待って！')],
     gestures: { greet: 'wave', happy: 'cheer', think: 'point' },
     affinity: ['soccer', 'dodgeball', 'basketball', 'dancing', 'singing', 'sweets', 'shopping', 'games'],
-    events: { group_outing: 1.6, meet_request: 1.4, special_day: 1.3, npc_hangout: 1.3, hobby: 1.1, home_visit: 1.1, practice: 1, delivery: 1, find: 1, best_friend: 1, remember: 0.9, project: 0.9 },
+    events: { group_outing: 1.6, meet_request: 1.4, special_day: 1.3, npc_hangout: 1.3, hobby: 1.1, home_visit: 1.1, friend_house: 1.1, practice: 1, delivery: 1, find: 1, best_friend: 1, remember: 0.9, project: 0.9 },
     initiative: { approach: 0.65, message: 0.35 },
   },
   thoughtful: {
@@ -63,7 +63,7 @@ export const STYLES = {
     approach: [S('Um... {name}?', 'あの…{name}？'), S('Hi, {name}...', 'こんにちは、{name}…')],
     gestures: { greet: 'nod', happy: 'happy', think: 'think' },
     affinity: ['reading', 'comics', 'piano', 'drawing', 'music', 'animals', 'cooking', 'games'],
-    events: { remember: 1.5, hobby: 1.3, project: 1.3, home_visit: 1.2, delivery: 1.1, practice: 1, special_day: 1, find: 1, best_friend: 1, meet_request: 0.8, npc_hangout: 0.8, group_outing: 0.7 },
+    events: { remember: 1.5, hobby: 1.3, project: 1.3, home_visit: 1.2, friend_house: 1.2, delivery: 1.1, practice: 1, special_day: 1, find: 1, best_friend: 1, meet_request: 0.8, npc_hangout: 0.8, group_outing: 0.7 },
     initiative: { approach: 0.3, message: 0.7 },
   },
   playful: {
@@ -85,7 +85,7 @@ export const STYLES = {
     approach: [S("{name}! Let's play!", '{name}！遊ぼう！'), S('Hey, {name}! Over here!', 'ねえ、{name}！こっちこっち！')],
     gestures: { greet: 'wave', happy: 'dance', think: 'happy' },
     affinity: ['soccer', 'baseball', 'dodgeball', 'basketball', 'skateboarding', 'running', 'games', 'dancing', 'cycling'],
-    events: { hobby: 1.4, practice: 1.4, group_outing: 1.3, find: 1.1, npc_hangout: 1.1, home_visit: 1.1, remember: 1, special_day: 1, meet_request: 1, best_friend: 1, delivery: 0.9, project: 0.9 },
+    events: { hobby: 1.4, practice: 1.4, group_outing: 1.3, find: 1.1, npc_hangout: 1.1, home_visit: 1.1, friend_house: 1.1, remember: 1, special_day: 1, meet_request: 1, best_friend: 1, delivery: 0.9, project: 0.9 },
     initiative: { approach: 0.6, message: 0.4 },
   },
   creative: {
@@ -107,7 +107,7 @@ export const STYLES = {
     approach: [S('{name}! I have an idea!', '{name}！アイデアがあるの！'), S('{name}! Look, look!', '{name}！見て見て！')],
     gestures: { greet: 'wave', happy: 'happy', think: 'think' },
     affinity: ['drawing', 'comics', 'music', 'singing', 'piano', 'dancing', 'cooking'],
-    events: { project: 1.6, hobby: 1.4, home_visit: 1.2, special_day: 1.1, remember: 1, delivery: 1, best_friend: 1, group_outing: 1, npc_hangout: 1, meet_request: 0.9, practice: 0.9, find: 0.9 },
+    events: { project: 1.6, hobby: 1.4, home_visit: 1.2, friend_house: 1.2, special_day: 1.1, remember: 1, delivery: 1, best_friend: 1, group_outing: 1, npc_hangout: 1, meet_request: 0.9, practice: 0.9, find: 0.9 },
     initiative: { approach: 0.45, message: 0.55 },
   },
   curious: {
@@ -129,7 +129,7 @@ export const STYLES = {
     approach: [S('{name}! Come and look!', '{name}！来て、見て！'), S('{name}! Over here!', '{name}！こっちだよ！')],
     gestures: { greet: 'wave', happy: 'happy', think: 'search' },
     affinity: ['animals', 'bugs', 'cycling', 'swimming', 'skateboarding', 'reading', 'running'],
-    events: { hobby: 1.3, meet_request: 1.3, find: 1.3, remember: 1.1, group_outing: 1.1, npc_hangout: 1.1, practice: 1, special_day: 1, delivery: 1, project: 1, best_friend: 1, home_visit: 1 },
+    events: { hobby: 1.3, meet_request: 1.3, find: 1.3, remember: 1.1, group_outing: 1.1, npc_hangout: 1.1, practice: 1, special_day: 1, delivery: 1, project: 1, best_friend: 1, home_visit: 1, friend_house: 1 },
     initiative: { approach: 0.55, message: 0.45 },
   },
   considerate: {
@@ -151,7 +151,7 @@ export const STYLES = {
     approach: [S('{name}! Hi! How are you?', '{name}！やあ！元気？'), S('{name}! Can we talk?', '{name}！ちょっと話せる？')],
     gestures: { greet: 'wave', happy: 'clap', think: 'nod' },
     affinity: ['cooking', 'sweets', 'animals', 'music', 'reading', 'singing'],
-    events: { delivery: 1.5, special_day: 1.4, practice: 1.3, find: 1.2, home_visit: 1.2, remember: 1.1, meet_request: 1.1, hobby: 1, project: 1, best_friend: 1, group_outing: 1, npc_hangout: 1 },
+    events: { delivery: 1.5, special_day: 1.4, practice: 1.3, find: 1.2, home_visit: 1.2, friend_house: 1.2, remember: 1.1, meet_request: 1.1, hobby: 1, project: 1, best_friend: 1, group_outing: 1, npc_hangout: 1 },
     initiative: { approach: 0.45, message: 0.55 },
   },
 };

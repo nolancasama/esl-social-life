@@ -2,6 +2,7 @@
 // (chatting friends, ball games, readers, joggers), markers and approach.
 
 import * as THREE from 'three';
+import { FRIEND_HOUSE_DOOR } from '../world/friendhouse.js';
 import { Character } from '../engine/character.js';
 import { LOCATIONS, interest, VISITORS } from '../data/content.js';
 import { NODES, exitsAt, headingBetween } from '../world/directions.js';
@@ -118,7 +119,9 @@ export class NpcManager {
       plan.npcIds.forEach((id, k) => {
         const e = take(id);
         if (!e) return;
-        if (sceneId === 'town' && plan.loc === 'park') {
+        if (sceneId === 'town' && plan.loc === 'friendhouse') {
+          this._spawn(e, FRIEND_HOUSE_DOOR.x + 0.55, FRIEND_HOUSE_DOOR.z + 0.84, Math.PI / 2, 'stand', { plan: true });
+        } else if (sceneId === 'town' && plan.loc === 'park') {
           const f = scene.field;
           this._spawn(e, f.b.x + k * 1.2 - (n - 1) * 0.6, f.b.z, 0, 'stand', { gesture: 'cheer', plan: true, prop: k === 0 && plan.act === 'soccer' ? 'ball' : k === 0 && plan.act === 'catch' ? 'baseball' : null });
         } else if (sceneId === 'cafe' || sceneId === 'mall') {

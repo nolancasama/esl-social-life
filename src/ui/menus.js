@@ -13,7 +13,8 @@ import { actPhrase3 } from '../world/schedule.js';
 import { voice } from '../dialogue/voice.js';
 import { VISITORS } from '../data/content.js';
 import { openOffer, openOffers, hobbyOptions, scheduleEvent, declineEvent, nextEventSlot } from '../world/friendship.js';
-import { planOuting } from '../dialogue/outing.js';
+import { FRIEND_HOUSE_DOOR } from '../world/friendhouse.js';
+import { planOuting, busyReason } from '../dialogue/outing.js';
 import { eventTitle } from '../dialogue/events.js';
 import { whenPhrase } from '../dialogue/common.js';
 
@@ -159,7 +160,11 @@ export class Menus {
             : w.addPlan({ npcIds: [n.id, ...(inv.with || [])], day, period, loc: inv.loc, act: inv.act, source: 'invite' }));
           reply("Sure! Let's go!", 'いいよ！行こう！', () => {
             const plan = book(inv.day, inv.period);
-            if (!plan) { this.game.hud.toast({ icon: '📅', en: 'You already have a plan then. Try "How about another day?"', ja: 'その時は予定があるよ。ほかの日にしよう。' }); return; }
+            if (!plan) {
+              const why = inv.loc === 'friendhouse' ? busyReason(w, n, inv.day, inv.period) : null;
+              this.game.hud.toast(why ? { icon: '📅', en: `${n.name}: ${why.en}`, ja: why.ja } : { icon: '📅', en: 'You already have a plan then. Try "How about another day?"', ja: 'その時は予定があるよ。ほかの日にしよう。' });
+              return;
+            }
             inv.status = 'accepted';
             w.logLine({ expr: 'a.sure', area: 'wantto', en: "Sure! Let's go!", template: "Sure! Let's go!" }, 'said');
             w.xp(n.id, 1, { key: `invite:${m.id}`, reason: 'invite' });
@@ -500,6 +505,7 @@ export class Menus {
   map() {
     const w = this.game.world;
     const places = [
+      ...(w.upcomingPlans().some((p) => p.loc === 'friendhouse') ? [{ id: 'friendhouse', x: 18, y: 65, icon: '🏡', target: FRIEND_HOUSE_DOOR }] : []),
       { id: 'classroom', x: 22, y: 20, icon: '🏫', target: { x: -23.4, z: -7.5 } },
       { id: 'mall', x: 75, y: 20, icon: '🛍️', target: { x: 25, z: -14 } },
       { id: 'park', x: 72, y: 70, icon: '🌸', target: { x: 14, z: 13 } },

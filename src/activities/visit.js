@@ -17,7 +17,7 @@ import { sfx } from '../core/audio.js';
 import { wait } from '../core/util.js';
 import { until } from './ballplay.js';
 
-async function raceGame(game, a, c) {
+export async function raceGame(game, a, c) {
   const scene = game.scene;
   const P = game.player;
   const tv = scene.tv;

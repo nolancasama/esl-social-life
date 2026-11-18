@@ -120,9 +120,9 @@ export function playerFree(world, day, period) {
  * Is this classmate free at (day, period)? Not at school, no other plan, not
  * meeting another classmate, and not away (lessons, grandparents, library).
  */
-export function npcFree(world, npcId, day, period) {
+export function npcFree(world, npcId, day, period, excludePlan = null) {
   if (!isFreeTime(day, period)) return false;
-  if (world.save.plans.some((p) => p.status === 'pending' && p.day === day && p.period === period && p.npcIds.includes(npcId))) return false;
+  if (world.save.plans.some((p) => p.id !== excludePlan && p.status === 'pending' && p.day === day && p.period === period && p.npcIds.includes(npcId))) return false;
   if (hangoutFor(world.save, npcId, day, period)) return false;
   const npc = world.npc(npcId);
   if (!npc) return false;
@@ -285,6 +285,7 @@ export function scheduleEvent(world, instanceId, { day, period, loc, act = null,
   if (!inst || !OPEN.has(inst.status)) return null;
   if (!isFreeTime(day, period)) return null;
   if (day < world.day || (day === world.day && period < world.period)) return null;
+  if (inst.template === 'friend_house' && !npcFree(world, inst.npcId, day, period, inst.plan)) return null;
   if (save.plans.some((p) => p.status === 'pending' && p.day === day && p.period === period && p.id !== inst.plan)) return null;
   if (inst.plan) cancelPlan(save, inst.plan);
   const plan = world.addPlan({ npcIds: npcIds || [inst.npcId, ...(inst.data.with || [])], day, period, loc, act: act || inst.data.act || inst.template, source: 'event' });

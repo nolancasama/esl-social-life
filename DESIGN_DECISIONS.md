@@ -27,6 +27,56 @@ A useful rule:
 
 ---
 
+## 2026-11-19 — Visiting a close friend's home
+
+- **What:** Add `friend_house`, the inverse of `home_visit`, at the same Lv4
+  gate, one-free-period cost and existing 12 XP personal-event reward. Friends
+  can invite in person or by message; the player can ask “Can I come to your
+  house?” in the topic menu. Acceptance books an event; the host waits by the
+  blue-roof neighbour north of the player's home. The map and goal lead there.
+  The door confirms the cost before starting; without a current visit it gives
+  a friendly not-now choice. Busy friends use their actual calendar reasons;
+  postponement, missing and decline retain the existing forgiving lifecycle.
+  **Why:** Walking to an existing landmark makes the inverse visit understandable
+  without a new travel system. **Rejected:** Automatic teleport on acceptance,
+  entering any house without an invitation, new level gates or reward amounts.
+- **What:** Message selection retains the original home-visit request's priority
+  when both directions are eligible; the inverse invitation shares that nightly
+  roll during the request's existing cooldown. In-person offers and the player's
+  topic can choose the inverse visit at any eligible Lv4+ conversation.
+  **Why:** Replacing the first request could leave an unanswered inverse offer
+  blocking the established request stream. Both directions keep the same offer
+  budget and unchanged eligibility rather than doubling a friend's initiative.
+  **Rejected:** Two independent nightly invitation rolls, changing the old visit
+  harness assertions, or adding a completion prerequisite to visit eligibility.
+- **What:** Use one bright cutaway interior layout, with merged static furniture
+  and pets. Wall colour is independently hashed from class seed and NPC id;
+  pet type/count and interest props come only from generated class data.
+  Home activities, then interests, select one racing game, drawing, music or
+  photo activity. Drawing/music reuse Hobby Session with indoor staging; racing
+  reuses the bedroom game. Photos show a stored shared photo or a fresh room
+  photo, with no invented family or travel history. Every new exchange has
+  Japanese hints and card intents shared with optional speech. Style-bank
+  reactions and gestures flavour the host without reading names or pronouns.
+  **Why:** One layout and static pets keep the scene small for school Chromebooks.
+  **Rejected:** Per-friend scene files, family characters, animated pet actors,
+  name-based decor, a second game/reward framework or mandatory speech.
+- **What:** Reuse saved event instances/plans, their personal `focus` memory,
+  once-only completion key and interrupted-event recovery. The memory has its
+  own host-view recall sentence and journal label. Keep save version 3: no new
+  persistent fields are needed. The unfinished visit remains the saved snapshot
+  until the result card is dismissed, when reward and time save together.
+  Leaving restores the same residential pavement even when the period ends.
+  **Why:** A reload can replay an unfinished visit without retaining free XP or
+  stranding the player in an interior. **Rejected:** A new save version for
+  derived decor, persisting activity steps, or awarding partial-visit XP.
+- **What:** Add pure eligibility/calendar/personalisation/reload/reward tests,
+  `e2e:friendhouse` with an actual walk and external screenshots, viewer support
+  and the same 90-draw-call performance ceiling as café/mall. Prove the harness
+  with a good run and a deliberately broken assertion, then restore it.
+  **Why:** The entrance, time cost and personal reward need observable checks;
+  final aesthetic judgment remains with Claude.
+
 ## 2026-11-17 — Hangout news before ordinary memory recalls
 
 - **What:** A completed, unreported NPC hangout defers the greeting's ordinary
