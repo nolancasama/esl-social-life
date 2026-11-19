@@ -1,7 +1,7 @@
 # Current State
 
 ## Status (2026-11-19)
-School-life expansion built on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, is committed after it (see DESIGN_DECISIONS.md 2026-11-19). Part 4, procedural music, is built and uncommitted for review.
+School-life expansion built on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, as `3af830f` (see DESIGN_DECISIONS.md 2026-11-19); Part 4, procedural music, as `2d8c0e7`. All four parts were merged to `main` (fast-forward) and deployed to GitHub Pages on 2026-11-19 (gh-pages `0fc4ee7`).
 
 The Friendship Depth expansion (SPEC.md Part 2) is built: all three phases.
 Phase 1 covers behaviour styles, data-driven friendship events, level-dependent
@@ -140,9 +140,12 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 1. Play on a classroom Chromebook: frame rate with groups and visits, touch on the composer cards, read-aloud quality.
 2. Playtest pacing: how many days to Lv3, Lv4 and Lv5 with one-on-one memories; whether 2 event offers a day feels right; whether soft approaches feel welcome rather than intrusive.
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
-4. All four school-life parts are built on `school-life-expansion`; each has its
-   own e2e script. Listen to the music on a classroom Chromebook, then merge to
-   `main` and deploy when the user asks.
+4. School-life expansion is live. Listen to the music on a classroom Chromebook
+   (balance, speech ducking) and fix anything found on `main`.
+5. A stale worktree from an older session still holds local `main` at
+   `428f2e3` (`%TEMP%/claude/.../97b2a4c3-.../scratchpad/esl-main`, with two
+   untracked scripts). `origin/main` is current; remove that worktree before
+   checking out `main` here.
 
 ## Codex / Delegated Work
 Part 4 (music) was built by Codex and reviewed by Claude: diff read, scene ids checked against theme names, screenshots inspected, full suite rerun by Claude. Claude then made the fixed-weekly-rhythm timetable change directly (content.js, school.js, school tests, e2e:school/e2e:music day fixtures). No pending worker output.
