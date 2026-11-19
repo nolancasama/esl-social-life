@@ -15,17 +15,21 @@ export function timetableForDay(day, timetable = TIMETABLE) {
   return (timetable[dow(day)] || []).map(subject).filter(Boolean);
 }
 
-/** The first specialist subject wins; day zero keeps its authored welcome. */
+/**
+ * Only a specialist subject in period 1 moves the morning to its room; later
+ * specialist periods are talked about but keep the homeroom morning.
+ * Day zero keeps its authored welcome.
+ */
 export function lessonForDay(day, timetable = TIMETABLE) {
   if (day <= 0 || isWeekend(day)) return null;
-  const id = (timetable[dow(day)] || []).find((s) => LESSONS[s]);
-  return id ? { day, subject: id, ...LESSONS[id] } : null;
+  const id = (timetable[dow(day)] || [])[0];
+  return LESSONS[id] ? { day, subject: id, ...LESSONS[id] } : null;
 }
 
 /** A seeded ring visits the entire class before repeating, with no adjacent repeat. */
 export function partnerForLesson(cls, day) {
   if (!lessonForDay(day) || !cls.npcs.length) return null;
-  const weekdays = TIMETABLE.map((list, index) => list.some((s) => LESSONS[s]) ? index : -1).filter((d) => d >= 0);
+  const weekdays = TIMETABLE.map((list, index) => LESSONS[list[0]] ? index : -1).filter((d) => d >= 0);
   const prior = Math.floor(day / 7) * weekdays.length + weekdays.filter((d) => d < dow(day)).length - (weekdays.includes(0) ? 1 : 0);
   const ring = new RNG(`${cls.seed}|school-partners`).shuffle(cls.npcs);
   return ring[prior % ring.length];

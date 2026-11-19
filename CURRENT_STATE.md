@@ -1,7 +1,7 @@
 # Current State
 
 ## Status (2026-11-19)
-School-life expansion in progress on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, is committed after it (see DESIGN_DECISIONS.md 2026-11-19). Part 4, music, is next.
+School-life expansion built on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, is committed after it (see DESIGN_DECISIONS.md 2026-11-19). Part 4, procedural music, is built and uncommitted for review.
 
 The Friendship Depth expansion (SPEC.md Part 2) is built: all three phases.
 Phase 1 covers behaviour styles, data-driven friendship events, level-dependent
@@ -13,7 +13,13 @@ built it directly at the user's request (no workers).
 Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-17): https://nolancasama.github.io/esl-social-life/. The automated suite is green; the remaining checks need a person (see Next Steps).
 
 ## What Exists
-- **School day (2026-11-19):** music room, gym and art room. On weekdays whose timetable has music, P.E. or arts and crafts, the morning starts in that room; the teacher introduces the lesson, a rotating partner (seeded ring over the whole class) does a short pair activity (rhythm meter, catch, drawing canvas), then time advances like the classroom desk. Lesson XP is at most +2 per partner per week through the fact cap; lesson memories never open level gates. "What do you have today?" also appears once per school day in a quiet casual chat, answered from the real timetable. `e2e:school` covers it; perf includes the three rooms.
+- **Music (2026-11-19, Part 4):** nine quiet procedural place loops, one-second
+  crossfades, independent Music / 音楽 volume, and Teacher Setup defaults for
+  new players. Music pauses for the microphone, ducks for read-aloud and Music
+  Time (including the school lesson), and starts only after an audio-unlock
+  gesture. No audio files or new dependencies; old profiles default to Quiet.
+  `window.__esl.music` exposes a frozen test snapshot.
+- **School day (2026-11-19):** music room, gym and art room. When period 1 is music, P.E. or arts and crafts the morning starts in that room: Monday gym, Wednesday music room, Friday art room; Tuesday and Thursday stay in homeroom (DESIGN_DECISIONS 2026-11-19, fixed weekly rhythm); the teacher introduces the lesson, a rotating partner (seeded ring over the whole class) does a short pair activity (rhythm meter, catch, drawing canvas), then time advances like the classroom desk. Lesson XP is at most +2 per partner per week through the fact cap; lesson memories never open level gates. "What do you have today?" also appears once per school day in a quiet casual chat, answered from the real timetable. `e2e:school` covers it; perf includes the three rooms.
 - **Visiting a friend's home (2026-11-19):** Lv4+ friends invite by message or
   in person, or the player asks “Can I come to your house?” in the topic menu.
   The existing event cards handle acceptance, another day and decline; real
@@ -61,7 +67,34 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - **Save version 3** (`world/migrate.js`, idempotent, run in the Game constructor). Version 1/2 saves keep every level, XP value and memory.
 - **Test hooks:** `window.__esl.friendship` (a frozen snapshot) and `window.__esl.friendshipDebug` (offer / complete / approach). Styles are not in the debug panel.
 
-## Verification (observed 2026-11-19, headless Chrome + SwiftShader, 1366×768)
+## Part 4 verification (2026-11-19, headless Chrome + SwiftShader, 1366×768)
+- Claude's rerun after the timetable change: `npm test` 80/80, build, `e2e`,
+  `e2e:school`, `e2e:music`, `e2e:mall`, `e2e:friendhouse`,
+  `e2e:friendship-all`, `e2e:perf` all PASS. (`e2e:school` and `e2e:mall`
+  need `SHOTS_DIR` set to a folder outside the repo.)
+- `npm test`: 80/80 PASS, including the fake-context music lifecycle test.
+- `npm run build`: PASS.
+- `npm run e2e`: PASS (playthrough, scenarios and mocked speech).
+- `npm run e2e:perf`: PASS for all nine scenes. Draw calls: classroom 96/150,
+  music room 119/150, gym 118/150, art room 118/150, town 56/70, café 62/90,
+  mall 25/90, bedroom 14/60, friend's home 13/90. Software-rendering proxies,
+  not real Chromebook measurements.
+- `npm run e2e:music`: PASS on the final script. Covers pre-gesture silence,
+  all nine themes, the Teacher Setup default applied through creator UI,
+  player volume persistence, independent SFX mute, mocked mic/read-aloud
+  overlap/error/cancel and late callbacks, and a real music-room rhythm lesson
+  with activity ducking and restoration. The new script initially needed two
+  harness corrections: finish the replayed welcome after reload; start the
+  held read-aloud without awaiting its completion promise before asserting.
+- Harness trust proof: a known-good music run exited 0; deliberately changing
+  the theme expectation to `scene + '-broken'` failed with exit 1 on all nine
+  themes. That break was reverted; the final extended run exited 0.
+- Visual evidence: settings and music-room rhythm screenshots captured outside
+  the repo in `C:\Users\nolan\AppData\Local\Temp\esl-music\` and inspected
+  at 1366×768. Claude retains final aesthetic judgment; musical balance needs
+  human listening on a real Chromebook.
+
+### Earlier verification (2026-11-19)
 - `npm test` 72/72 PASS, including nine new personalisation/lifecycle/message tests.
 - `npm run e2e` PASS: playthrough, scenarios and mocked speech. The initial
   attempt was interrupted by Vite hot reloads during source edits; the clean
@@ -97,8 +130,9 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - Characters walk in straight lines; soft approaches are skipped when the walk is not clear. No pathfinding.
 - Several e2e scripts use debug hooks to reach late-game content quickly; the journey script plays the natural path.
 - Bubbles over characters are English only; the Japanese hint appears once you talk.
-- Not built yet in this expansion: music (queued, see Next Steps).
-- **Open design question (asked the user 2026-11-19):** every weekday in `TIMETABLE` has music, P.E. or arts, so after day 0 every weekday morning is a specialist lesson and the ordinary classroom morning (homeroom desk) no longer occurs on weekdays.
+- Music's acoustic balance on real classroom speakers and real-device speech
+  coordination still need a Chromebook listening check; automated audio state
+  checks use mocked speech and do not listen to the output.
 - `e2e:friendship` is occasionally flaky: in section H the best friend can start the random lost-ball favour instead of the milestone (seen once in 3 runs on 2026-11-19; not caused by the school work).
 - School rooms (perf: 118-119 of 150 draw calls each): classmates stand in loose spots around the room during the lesson; in the gym the teacher stands behind the catch partner. Fine for now; polish if playtests show it matters.
 
@@ -106,12 +140,13 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 1. Play on a classroom Chromebook: frame rate with groups and visits, touch on the composer cards, read-aloud quality.
 2. Playtest pacing: how many days to Lv3, Lv4 and Lv5 with one-on-one memories; whether 2 event offers a day feels right; whether soft approaches feel welcome rather than intrusive.
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
-4. School-life expansion (user asked for all four, 2026-11-17), in this order on branch `school-life-expansion`: Niji Mall (done, `d078832`), visiting a friend's home (done, `e0274e1`), school day (done), then:
-   - **Part 3, school day and specialist classrooms:** a music room, gym and art room. On days the timetable has music, P.E. or art, the morning lesson happens in that room as a short pair activity with a different classmate each time (music: rhythm game; P.E.: ball play; art: drawing canvas). New lines such as "What do you have today?" / "I have P.E. and math." Lesson memories are capped so pair work cannot level up friendships.
-   - **Part 4, music:** gentle background music generated in the browser (no audio files), a different loop per place; pauses while the mic is listening and ducks during read-aloud; a music volume setting plus a default in Teacher Setup.
-   Each part has its own e2e script and a full-suite run before the next starts.
+4. All four school-life parts are built on `school-life-expansion`; each has its
+   own e2e script. Listen to the music on a classroom Chromebook, then merge to
+   `main` and deploy when the user asks.
 
 ## Codex / Delegated Work
+Part 4 (music) was built by Codex and reviewed by Claude: diff read, scene ids checked against theme names, screenshots inspected, full suite rerun by Claude. Claude then made the fixed-weekly-rhythm timetable change directly (content.js, school.js, school tests, e2e:school/e2e:music day fixtures). No pending worker output.
+
 Part 3 was built by Codex (stopped on a usage limit before validation) and finished by Claude at the user's request: casual-question priority fix, two e2e fixture fixes, harness proof (known-good pass; a deliberately broken intro line failed with exit 1, reverted), full suite rerun. No pending worker output.
 
 Niji Mall was built by Codex and reviewed by Claude (diff, screenshots, full suite rerun by Claude), then committed as `d078832`. The hangout-report priority rule was a direct Claude edit. Codex implemented the friend's-home part (run timed out during final validation); Claude reviewed the diff, made the cat model read as a cat (pointed ears, whiskers, upright tail instead of a curled shiba tail), reran the full suite (unit + 9 e2e suites, all PASS, perf friendhouse 13/90 draw calls) and committed it. No pending worker output.

@@ -15,7 +15,7 @@ const H = harness(page, out);
 const { log, shot, sleep, pump, settle, expect } = H;
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const idle = () => ev(() => window.__esl.mode === 'explore' && !window.__esl.hud.showingCard);
-const lessonDays = [{ day: 1, room: 'musicroom', subject: 'music' }, { day: 2, room: 'gym', subject: 'P.E.' }, { day: 4, room: 'artroom', subject: 'arts and crafts' }];
+const lessonDays = [{ day: 2, room: 'musicroom', subject: 'music', reload: true }, { day: 4, room: 'artroom', subject: 'arts and crafts' }, { day: 7, room: 'gym', subject: 'P.E.' }];
 
 async function morning(day) {
   return ev(async (day) => {
@@ -65,21 +65,14 @@ try {
   expect(await pump(() => ev(() => window.__esl.welcomeDone && window.__esl.mode === 'explore'), { label: 'welcome', max: 80 }), 'day-zero welcome stays in the normal classroom');
   await settle();
 
-  // The current timetable has a specialist every weekday. Temporarily remove
-  // specialists from one weekday to prove the fallback, then restore it before
-  // testing any authored day or timetable sentence.
+  // Tuesday has music in period 4, not period 1: the morning stays in homeroom.
   const ordinary = await ev(async () => {
     const g = window.__esl, w = g.world;
-    const { TIMETABLE } = await import('/src/data/content.js');
-    const saved = TIMETABLE[2].slice();
-    try {
-      TIMETABLE[2].splice(0, TIMETABLE[2].length, 'japanese', 'math', 'science', 'english');
-      w.save.flags.fd = 'done'; w.save.time = { day: 2, period: 0 }; w.ensureDaily();
-      g.hud.queue.length = 0; await g.enterSchoolMorning();
-      return { scene: g.sceneId, period: w.period, lessonAction: g.scene.interact.some((i) => i.kind === 'schoolLesson') };
-    } finally { TIMETABLE[2].splice(0, TIMETABLE[2].length, ...saved); }
+    w.save.flags.fd = 'done'; w.save.time = { day: 1, period: 0 }; w.ensureDaily();
+    g.hud.queue.length = 0; await g.enterSchoolMorning();
+    return { scene: g.sceneId, period: w.period, lessonAction: g.scene.interact.some((i) => i.kind === 'schoolLesson') };
   });
-  expect(ordinary.scene === 'classroom' && ordinary.period === 0 && !ordinary.lessonAction, 'a weekday without a specialist preserves the ordinary classroom morning');
+  expect(ordinary.scene === 'classroom' && ordinary.period === 0 && !ordinary.lessonAction, 'Tuesday (specialist later in the day) keeps the ordinary homeroom morning');
 
   const partners = [];
   for (const spec of lessonDays) {
@@ -93,7 +86,7 @@ try {
     expect(await page.locator('.dlg-ja').count() > 0, 'the teacher introduction has a Japanese hint');
     await shot(`${spec.room}-teacher-intro`);
 
-    if (spec.day === 1) {
+    if (spec.reload) {
       await ev(() => window.__esl.save(true));
       await reloadProfile();
       const resumed = await snapshot(before.id);
@@ -183,22 +176,22 @@ try {
     const { lessonForDay, completeSchoolLesson } = await import('/src/world/school.js');
     const n = g.world.npcs[0];
     const save = structuredClone(g.world.save);
-    save.rel = {}; save.memories = []; save.excluded = []; save.time = { day: 1, period: 0 };
+    save.rel = {}; save.memories = []; save.excluded = []; save.time = { day: 7, period: 0 };
     // A one-classmate fixture means every lesson necessarily uses the same
     // partner. Start beyond every XP threshold to exercise the memory gate.
     const w = new World({ ...g.cls, npcs: [n] }, save);
     w.meet(n.id); w.rel(n.id).level = 2; w.rel(n.id).xp = 72;
     const awards = [];
-    for (const day of [1, 2, 3, 4]) {
+    for (const day of [7, 9, 11]) {
       save.time = { day, period: 0 }; w.ensureDaily();
       const result = completeSchoolLesson(w, lessonForDay(day), n.id);
       awards.push(result.xp);
     }
     const beforeDuplicate = save.memories.length;
-    completeSchoolLesson(w, lessonForDay(4), n.id);
+    completeSchoolLesson(w, lessonForDay(11), n.id);
     return { awards, xp: w.rel(n.id).xp, level: w.level(n.id), gates: w.rel(n.id).memories.length, allSchool: save.memories.every((m) => m.type === 'lesson' && m.focus.length === 0), memories: save.memories.length, beforeDuplicate };
   });
-  expect(capped.awards[0] === 2 && capped.awards.slice(1).every((xp) => xp === 0) && capped.xp === 74, 'four lessons with the same partner award at most 2 XP in one week');
+  expect(capped.awards[0] === 2 && capped.awards.slice(1).every((xp) => xp === 0) && capped.xp === 74, 'three lessons with the same partner award at most 2 XP in one week');
   expect(capped.level === 2 && capped.gates === 0 && capped.allSchool && capped.memories === capped.beforeDuplicate, 'even many lesson memories and high XP cannot open a friendship gate or duplicate completion');
 
   const finalBefore = await snapshot(partners.at(-1));

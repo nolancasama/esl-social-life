@@ -16,6 +16,7 @@ import { line, P } from '../dialogue/lines.js';
 import { PHRASES, YES_KEYS } from '../dialogue/intent.js';
 import { StaticBuilder } from '../engine/builder.js';
 import { sfx } from '../core/audio.js';
+import { holdMusic } from '../core/music.js';
 import { wait, el } from '../core/util.js';
 import { interest, numberWord } from '../data/content.js';
 import { styleLine, styleGesture } from '../world/personality.js';
@@ -518,10 +519,14 @@ async function playBallPractice(game, actor, { soccer }) {
  * like: the interest behind it; practice: help the friend get better;
  * project: { recipient } for a card.
  */
-export function playHobby(game, actors, { variant, like = null, practice = false, project = null, soccer = false, where = null } = {}) {
+export async function playHobby(game, actors, { variant, like = null, practice = false, project = null, soccer = false, where = null } = {}) {
   const actor = actors[0];
   if (variant === 'draw') return playDraw(game, actor, { project, where });
   if (variant === 'spot') return playSpot(game, actor, { like });
-  if (variant === 'music') return playMusic(game, actor, { like, practice, where });
+  if (variant === 'music') {
+    const release = holdMusic('activity');
+    try { return await playMusic(game, actor, { like, practice, where }); }
+    finally { release(); }
+  }
   return playBallPractice(game, actor, { soccer });
 }

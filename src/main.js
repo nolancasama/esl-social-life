@@ -14,6 +14,12 @@ import { logExpr } from './world/progression.js';
 import { DEFAULT_ROSTER } from './data/roster.js';
 import { interest, ability, dateText } from './data/content.js';
 import { makeId } from './core/util.js';
+import { musicLevel } from './core/music.js';
+import { unlockAudio } from './core/audio.js';
+
+// Covers keyboard/touch entry as well as title buttons, including test autostart.
+document.addEventListener('pointerdown', unlockAudio, { capture: true });
+document.addEventListener('keydown', unlockAudio, { capture: true });
 
 const params = new URLSearchParams(location.search);
 const ui = document.getElementById('ui');
@@ -45,7 +51,7 @@ function newSave(cls, { name, rosterId, look, like, can, birthday }) {
     lang: { expr: {}, areas: {} }, daily: null,
     flags: { fd: pair.firstFriend && pair.intro ? 'start' : 'done' },
     firstFriend: pair.firstFriend, introNpc: pair.intro, heard: [], weatherOverrides: {}, eveningQueue: [],
-    settings: { japanese: cls.settings.japanese !== false, voice: true, readAnswers: true, sfx: true, quality: 'auto', mic: false },
+    settings: { japanese: cls.settings.japanese !== false, voice: true, readAnswers: true, sfx: true, quality: 'auto', mic: false, music: musicLevel(cls.settings.musicDefault) },
     stats: { activities: 0 },
   };
   migrateSave(save);

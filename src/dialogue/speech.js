@@ -6,6 +6,8 @@
 // service. The default policy is 'local' (on-device recognition only, when the
 // browser supports it). A teacher can opt in to 'online' in Teacher Setup.
 
+import { holdMusic } from '../core/music.js';
+
 const SR = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
 const SESSION_MS = 8000;
 
@@ -47,6 +49,7 @@ export class SpeechInput {
   _set(status, reason = '') { this.status = status; this.reason = reason; this._emit(); }
 
   async configure(policy, userOn) {
+    if (this.session && (policy !== this.policy || userOn === false)) this.abort();
     this.policy = policy;
     if (userOn !== undefined) this.userOn = userOn;
     if (!SR) return this._set('unavailable', 'unsupported');
@@ -78,8 +81,10 @@ export class SpeechInput {
 
   abort() {
     if (this.session) {
-      this.session.silent = true;
-      try { this.session.rec.abort(); } catch { /* ignore */ }
+      const session = this.session;
+      session.silent = true;
+      try { session.rec.abort(); } catch { /* ignore */ }
+      session.finish();
     }
   }
 
@@ -103,11 +108,35 @@ export class SpeechInput {
     } else if (this.policy !== 'online') {
       return false;
     }
-    const s = { rec, silent: false, finalAlts: null, interimAlts: null, errored: false };
+    const s = { rec, silent: false, finalAlts: null, interimAlts: null, errored: false, finished: false };
     this.session = s;
-    const timer = setTimeout(() => { try { rec.stop(); } catch { /* ignore */ } }, SESSION_MS);
+    const releaseMusic = holdMusic('mic');
+    let fallback;
+    const timer = setTimeout(() => {
+      try { rec.stop(); } catch { /* ignore */ }
+      // Some implementations never deliver onend after stop or a service error.
+      if (!s.finished) fallback = setTimeout(() => s.finish(), 500);
+    }, SESSION_MS);
+    s.finish = () => {
+      if (s.finished) return;
+      s.finished = true;
+      clearTimeout(timer);
+      clearTimeout(fallback);
+      releaseMusic();
+      if (this.session === s) {
+        this.session = null;
+        if (this.status === 'listening') this._set(this.userOn ? 'ready' : 'off');
+      }
+      if (!s.silent) {
+        const alts = s.finalAlts || s.interimAlts;
+        if (alts) handlers.onResult?.(alts);
+        else if (!s.errored) handlers.onError?.('timeout');
+      }
+      handlers.onEnd?.({ aborted: s.silent });
+    };
 
     rec.onresult = (ev) => {
+      if (s.finished) return;
       const result = ev.results[ev.results.length - 1];
       if (!result) return;
       const alts = [];
@@ -117,8 +146,10 @@ export class SpeechInput {
       if (!s.silent) handlers.onInterim?.(alts, result.isFinal);
     };
     rec.onerror = (ev) => {
+      releaseMusic();
+      if (s.finished) return;
       const e = ev?.error;
-      if (e === 'aborted' || s.silent) return;
+      if (e === 'aborted' || s.silent) { s.silent = true; s.finish(); return; }
       s.errored = true;
       if (e === 'no-speech') handlers.onError?.('no-speech');
       else if (e === 'not-allowed' || e === 'service-not-allowed') { this._set('unavailable', 'denied'); handlers.onError?.('denied'); }
@@ -126,24 +157,18 @@ export class SpeechInput {
       else if (e === 'network') handlers.onError?.('network');
       else if (e === 'language-not-supported') { this._set('unavailable', 'no-local'); handlers.onError?.('error'); }
       else handlers.onError?.('error');
+      s.finish();
     };
-    rec.onend = () => {
-      clearTimeout(timer);
-      if (this.session === s) this.session = null;
-      if (this.status === 'listening') this._set(this.userOn ? 'ready' : 'off');
-      if (!s.silent) {
-        const alts = s.finalAlts || s.interimAlts;
-        if (alts) handlers.onResult?.(alts);
-        else if (!s.errored) handlers.onError?.('timeout');
-      }
-      handlers.onEnd?.({ aborted: s.silent });
-    };
+    rec.onend = s.finish;
     try {
       rec.start();
       this._set('listening');
       return true;
     } catch (err) {
       clearTimeout(timer);
+      clearTimeout(fallback);
+      releaseMusic();
+      s.finished = true;
       this.session = null;
       console.warn('[speech] start failed', err);
       handlers.onError?.('error');

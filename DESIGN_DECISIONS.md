@@ -358,3 +358,51 @@ Rules for every template:
 - **Hobby Session.** It is card-driven so it stays reliable on Chromebooks and with touch. Drawing paints on a 2D canvas overlay, and the finished drawing becomes the memory photo. Nature spotting moves the camera to park hide points and asks "How many?" with number cards. Music uses the existing timing meter with notes. Practice inverts ball play (the player throws, the friend learns). A project card becomes a delivery when the activity ends.
 - **Home visits.** The bedroom got a TV corner on the north wall (a low stand, a TV, two controllers). The visitor walks in from the door to a free spot on the rug and waits with the plan marker. The visit covers the photo wall (a real memory), "How many games do you have?", then the player chooses a racing game or a souvenir tour; the friend then leaves through the door. Visits happen only in free periods, so they never collide with sleep. Sleeping through a planned visit is a gentle miss and the offer comes back.
 - **Friends ask about you.** At Lv2+, a friend sometimes asks "What do you do on Saturdays?", "What food do you like?" or "Do you have a pet?" (once each per friend). Best friends then use the answers in personal greetings.
+
+## 2026-11-19 — Procedural background music (school-life Part 4)
+
+- **What:** Nine distinct pentatonic loops for town, classroom, café, bedroom,
+  mall, friend's home, music room, gym and art room. Unknown places use town;
+  title and creator remain silent. Soft sine bass and triangle melody at
+  70–96 BPM share the existing AudioContext, with an independent music gain.
+  Quiet (20%) is the default; Off, Quiet and Normal (40%) in Teacher Setup
+  seed new profiles. The player's Music / 音楽 slider saves independently of
+  sound-effects mute. Older saves use Quiet without changing save version 3
+  or the idempotent v1–v3 migration path.
+- **Why:** Music adds warmth without carrying information or competing with
+  English. Muted classrooms lose nothing. Microphone listening fades music to
+  silence; read-aloud uses 15% of the chosen level; Music Time (also used by
+  the school lesson) uses 2.5%. Idempotent holds protect overlapping sessions,
+  cancellation, late callbacks and missing browser completion events.
+- **Implementation decision:** One 100ms look-ahead scheduler schedules only
+  250ms ahead on Web Audio time, with few overlapping voices and explicit node
+  cleanup. Places crossfade over one second; retired tracks disconnect after
+  fading. Music waits for the existing audio unlock from a pointer/key gesture.
+  A frozen `window.__esl.music` snapshot supports deterministic state checks.
+- **Rejected:** Audio files (downloads, licensing and asset weight), another
+  AudioContext (unnecessary device cost), per-note JavaScript intervals (timing
+  jitter), dense chords/percussion (compete with speech), and coupling music
+  to SFX mute (teachers and players need separate controls).
+- **Verification approach:** Fake-context node checks cover scheduling,
+  crossfades and cleanup; `e2e:music` covers the actual settings/default UI,
+  reloads, all place identities and mocked speech lifecycle. Automated checks
+  cannot judge musical balance through classroom speakers; listening on a real
+  Chromebook remains a human review task.
+
+## 2026-11-19 — Fixed weekly school rhythm: homeroom on Tuesday and Thursday
+
+- **What:** Only a specialist subject in **period 1** moves the morning to its
+  room (`lessonForDay`). `TIMETABLE` was reordered so the week is Monday gym
+  (P.E.), Tuesday homeroom, Wednesday music room, Thursday homeroom, Friday art
+  room. Specialist subjects later in the day (Tuesday music and arts, Thursday
+  P.E.) are still in the timetable, the wall chart and "What do you have
+  today?", but the morning stays at the homeroom desk.
+- **Why:** The old rule ("first specialist subject that day") plus a timetable
+  with one on every weekday meant the ordinary homeroom morning never happened
+  after day 0. Homeroom is where the class feels like a class; each room stays a
+  weekly event; a fixed pattern ("Monday is P.E.") gives students real schedule
+  language. Lesson XP is capped per partner per week, so pacing is unchanged.
+- **Rejected:** A realistic Japanese Grade 5 timetable (P.E. about three times a
+  week), which would bring back the always-a-lesson problem; seeded random
+  lesson days, which are less predictable for students talking about the week.
+  Decided with the user in conversation, 2026-11-19.

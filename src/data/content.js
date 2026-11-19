@@ -164,12 +164,14 @@ export const SUBJECTS = [
 ];
 
 // Class 5-1 weekly timetable (Mon–Fri).
+// Period 1 sets the morning room (world/school.js lessonForDay): Monday gym,
+// Wednesday music room, Friday art room; Tuesday and Thursday stay in homeroom.
 export const TIMETABLE = [
-  ['japanese', 'math', 'science', 'english', 'pe'],
+  ['pe', 'japanese', 'math', 'science', 'english'],
   ['math', 'japanese', 'social', 'music', 'arts'],
-  ['science', 'math', 'english', 'japanese', 'pe'],
-  ['japanese', 'social', 'math', 'homeec', 'music'],
-  ['math', 'english', 'arts', 'science', 'japanese'],
+  ['music', 'science', 'math', 'english', 'japanese'],
+  ['japanese', 'social', 'math', 'homeec', 'pe'],
+  ['arts', 'math', 'english', 'science', 'japanese'],
 ];
 
 export const PETS = [

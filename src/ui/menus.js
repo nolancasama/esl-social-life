@@ -568,6 +568,15 @@ export class Menus {
       row('Read my answers aloud', '自分の答えも読み上げる', 'readAnswers'),
       row('Sound effects', '効果音', 'sfx'),
     );
+    const music = el('input', { type: 'range', min: 0, max: 1, step: 0.05, 'aria-label': 'Music' });
+    music.value = s.music;
+    const level = el('output', {}, [`${Math.round(s.music * 100)}%`]);
+    music.addEventListener('input', () => {
+      s.music = Number(music.value);
+      level.textContent = `${Math.round(s.music * 100)}%`;
+      this.game.applySettings(); this.game.saveSettings();
+    });
+    this.body.appendChild(el('div', { class: 'setrow' }, [el('span', {}, ['Music', this.j ? el('small', {}, ['音楽']) : null]), music, level]));
     const q = el('div', { class: 'setrow' }, [el('span', {}, ['Graphics', this.j ? el('small', {}, ['画質']) : null])]);
     for (const [id, label] of [['auto', 'Auto'], ['high', 'High'], ['low', 'Fast']]) {
       const b = el('button', { class: `toggle${s.quality === id ? ' on' : ''}` }, [label]);

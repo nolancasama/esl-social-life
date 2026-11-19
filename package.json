@@ -24,6 +24,7 @@
     "e2e:mall": "node scripts/run-e2e.mjs mall",
     "e2e:friendhouse": "node scripts/run-e2e.mjs friendhouse",
     "e2e:school": "node scripts/run-e2e.mjs school",
+    "e2e:music": "node scripts/run-e2e.mjs music",
     "e2e:friendship-all": "node scripts/run-e2e.mjs friendship hobby groups visits journey"
   },
   "dependencies": {

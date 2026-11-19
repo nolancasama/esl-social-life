@@ -5,6 +5,13 @@ let ctx = null;
 let master = null;
 let volume = 0.55;
 let muted = false;
+const unlockListeners = new Set();
+let unlocked = false;
+
+// Music shares the context, never the sound-effects master gain. This accessor
+// does not create a context: music must wait for unlockAudio's user gesture.
+export function audioContext() { return unlocked ? ctx : null; }
+export function onAudioUnlock(fn) { unlockListeners.add(fn); return () => unlockListeners.delete(fn); }
 
 function ensure() {
   if (ctx) return ctx;
@@ -21,7 +28,9 @@ function ensure() {
 
 export function unlockAudio() {
   const c = ensure();
+  unlocked = true;
   if (c && c.state === 'suspended') c.resume().catch(() => {});
+  if (c) for (const fn of unlockListeners) fn(c);
 }
 
 export function setVolume(v) { volume = v; if (master) master.gain.value = muted ? 0 : volume; }

@@ -31,6 +31,7 @@ import { Activities } from '../activities/index.js';
 import { el, wait, clamp, damp } from '../core/util.js';
 import { bus } from '../core/events.js';
 import { sfx, setMuted } from '../core/audio.js';
+import { musicLevel, musicSnapshot, setMusicTheme, setMusicVolume, stopMusic } from '../core/music.js';
 import * as store from '../core/store.js';
 import { LOCATIONS, DAYS, MONTHS, WEATHER, TIMETABLE, SUBJECTS, timeWords, timeJa, ordinal } from '../data/content.js';
 import { MORNING, AFTERNOON, EVENING } from '../world/time.js';
@@ -62,6 +63,8 @@ export class Game {
       approach: (npcId) => { const a = this.npcs.actorFor(npcId); if (!a) return false; this.npcs.approachQueue = [{ actor: a, delay: 0.3, scripted: false }]; return true; },
     };
     this.settings = { japanese: cls.settings?.japanese !== false, voice: true, readAnswers: true, sfx: true, quality: 'auto', mic: false, ...(save.settings || {}) };
+    // Older profiles have a quiet fallback; class defaults only seed new saves.
+    this.settings.music = musicLevel(this.settings.music);
     this.mode = 'explore';
     this.voice = voice;
     this.camera = new CameraRig(renderer.camera);
@@ -101,7 +104,9 @@ export class Game {
   // ------------------------------------------------------------ settings & saving
   applySettings() {
     setMuted(!this.settings.sfx);
+    setMusicVolume(this.settings.music);
     voice.enabled = this.settings.voice;
+    if (!voice.enabled) voice.stop();
     voice.setAllowOnline(this.cls.settings?.speech === 'online');
     this.renderer.setQuality(this.settings.quality || 'auto');
     this.hud?.refresh();
@@ -122,6 +127,7 @@ export class Game {
 
   /** Read-only friendship state for tests (`window.__esl.friendship`). */
   get friendship() { return snapshot(this.world); }
+  get music() { return musicSnapshot(); }
 
   portrait(npc) { return this.portraitFn(npc.look, npc.id + ':' + (npc.lookSeed || 0)); }
   playerPortrait() { return this.portraitFn(this.world.save.player.look, 'player:' + JSON.stringify(this.world.save.player.look).length + this.world.save.player.look.hairStyle + this.world.save.player.look.topColor); }
@@ -177,6 +183,7 @@ export class Game {
       const scene = this.getScene(id);
       this.scene = scene;
       this.sceneId = id;
+      setMusicTheme(id);
       if (this.hud.manualGoal?.local && this.hud.manualGoal.loc !== id) this.hud.setGoal(null);
       this.extraInteract = [];
       this.sparkles = [];
@@ -741,6 +748,9 @@ export class Game {
     for (const d of this.disposers) d();
     this.dialogue.close();
     this.npcs.clear();
+    speech.abort();
+    voice.stop();
+    stopMusic();
     this.onQuit?.();
   }
 }

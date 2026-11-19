@@ -2,6 +2,8 @@
 // the device are used unless the teacher allows online services, because a
 // cloud voice would receive the text (which can contain classmates' names).
 
+import { holdMusic } from '../core/music.js';
+
 const PREFERRED = ['Samantha', 'Ava', 'Allison', 'Susan', 'Chrome OS US English', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Microsoft Zira', 'Karen', 'Moira'];
 
 function strip(text) {
@@ -17,6 +19,7 @@ export class Voice {
     this.enabled = true;
     this.allowOnline = false;
     this.voice = null;
+    this.finishSpeech = null;
     if (this.synth) {
       this._pick();
       this.synth.addEventListener?.('voiceschanged', () => this._pick());
@@ -47,22 +50,36 @@ export class Voice {
     if (!this.enabled || !this.available) return Promise.resolve();
     const clean = strip(text);
     if (!clean) return Promise.resolve();
-    try { this.synth.cancel(); } catch { /* ignore */ }
+    this.stop();
     return new Promise((resolve) => {
       const u = new SpeechSynthesisUtterance(clean);
       u.voice = this.voice;
       u.lang = this.voice.lang;
       u.pitch = Math.max(0.5, Math.min(2, pitch));
       u.rate = Math.max(0.6, Math.min(1.2, rate));
-      const done = () => resolve();
+      const releaseMusic = holdMusic('voice');
+      let finished = false;
+      let timer;
+      const done = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        releaseMusic();
+        if (this.finishSpeech === done) this.finishSpeech = null;
+        resolve();
+      };
+      this.finishSpeech = done;
       u.onend = done;
       u.onerror = done;
-      setTimeout(done, 9000);
-      this.synth.speak(u);
+      timer = setTimeout(done, 9000);
+      try { this.synth.speak(u); } catch { done(); }
     });
   }
 
-  stop() { try { this.synth?.cancel(); } catch { /* ignore */ } }
+  stop() {
+    this.finishSpeech?.();
+    try { this.synth?.cancel(); } catch { /* ignore */ }
+  }
 }
 
 export const voice = new Voice();

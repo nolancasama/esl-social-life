@@ -204,9 +204,13 @@ export function teacherScreen(ui, { cls, onDone, portrait }) {
     speechSel.addEventListener('change', () => { s.speech = speechSel.value; s.allowOnline = speechSel.value === 'online'; save(); });
     const jaSel = el('select', {}, [el('option', { value: '1', selected: s.japanese !== false ? 'selected' : null }, ['Japanese hints ON']), el('option', { value: '0', selected: s.japanese === false ? 'selected' : null }, ['Japanese hints OFF'])]);
     jaSel.addEventListener('change', () => { s.japanese = jaSel.value === '1'; save(); });
+    const musicSel = el('select', { 'aria-label': 'Default music' }, [[0, 'Off'], [0.2, 'Quiet'], [0.4, 'Normal']].map(([value, label]) =>
+      el('option', { value, selected: (s.musicDefault ?? 0.2) === value ? 'selected' : null }, [label])));
+    musicSel.addEventListener('change', () => { s.musicDefault = Number(musicSel.value); save(); });
     box.appendChild(el('div', { class: 'tsettings' }, [
       el('label', {}, ['🎤 Speech input', speechSel]),
       el('label', {}, ['🇯🇵 New players start with', jaSel]),
+      el('label', {}, ['Music default · 音楽', musicSel]),
       el('p', { class: 'tnote' }, ['On-device speech keeps students’ voices on the Chromebook (Chrome may need a one-time language download). The online option sends speech audio to the browser maker’s speech service. Read-aloud uses only voices installed on the device unless the online option is chosen.']),
     ]));
 

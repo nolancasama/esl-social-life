@@ -19,8 +19,10 @@ test('school lessons follow the first real specialist subject and preserve welco
   assert.equal(lessonForDay(0), null);
   assert.equal(lessonForDay(5), null);
   assert.equal(lessonForDay(6), null);
-  assert.equal(lessonForDay(1).subject, 'music', 'Tuesday chooses music before arts');
-  assert.equal(lessonForDay(2).scene, 'gym');
+  assert.equal(lessonForDay(1), null, 'Tuesday has music later in the day but keeps the homeroom morning');
+  assert.equal(lessonForDay(3), null, 'Thursday keeps the homeroom morning');
+  assert.equal(lessonForDay(7).scene, 'gym', 'Monday after the welcome day starts in the gym');
+  assert.equal(lessonForDay(2).scene, 'musicroom');
   assert.equal(lessonForDay(4).scene, 'artroom');
   const ordinary = TIMETABLE.map((row) => row.filter((id) => !['music', 'pe', 'arts'].includes(id)));
   assert.equal(lessonForDay(1, ordinary), null, 'a weekday without specialist subjects stays a classroom morning');
@@ -28,7 +30,8 @@ test('school lessons follow the first real specialist subject and preserve welco
 
 test('partners rotate deterministically through the full roster before repeating', () => {
   const cls = { seed: 'rotation', npcs: Array.from({ length: 12 }, (_, i) => ({ id: `npc-${i}`, name: `Name ${i}` })) };
-  const days = Array.from({ length: 45 }, (_, i) => i).filter((day) => lessonForDay(day));
+  // Three lesson mornings a week: 70 days give more than two full 12-person rings.
+  const days = Array.from({ length: 70 }, (_, i) => i).filter((day) => lessonForDay(day));
   const ids = days.map((day) => partnerForLesson(cls, day).id);
   assert.equal(new Set(ids.slice(0, 12)).size, 12);
   assert.deepEqual(ids.slice(12, 24), ids.slice(0, 12));
@@ -54,7 +57,7 @@ test('timetable cards list that real day in English and Japanese', () => {
 });
 
 test('lessons award at most two XP per partner per week and are idempotent after reload', () => {
-  let w = makeWorld();
+  let w = makeWorld(7);
   const lesson = lessonForDay(w.day);
   const result = completeSchoolLesson(w, lesson, 'partner');
   assert.equal(result.completed, true);
@@ -64,25 +67,25 @@ test('lessons award at most two XP per partner per week and are idempotent after
   w = new World(w.cls, migrateSave(structuredClone(w.save)));
   assert.equal(completeSchoolLesson(w, lesson, 'partner').completed, false);
   assert.equal(w.save.memories.length, 1);
-  assert.ok(schoolLessonMemory(w.save, 1));
-  for (const day of [2, 3, 4]) {
+  assert.ok(schoolLessonMemory(w.save, 7));
+  for (const day of [9, 11]) {
     w.save.time.day = day;
     assert.equal(completeSchoolLesson(w, lessonForDay(day), 'partner').xp, 0);
   }
   assert.equal(w.rel('partner').xp, 2);
-  w.save.time.day = 7;
-  assert.equal(completeSchoolLesson(w, lessonForDay(7), 'partner').xp, 2, 'a new calendar week has its own small award');
+  w.save.time.day = 14;
+  assert.equal(completeSchoolLesson(w, lessonForDay(14), 'partner').xp, 2, 'a new calendar week has its own small award');
 });
 
 test('lesson connection shares the existing daily fact ceiling in either order', () => {
-  const w = makeWorld();
+  const w = makeWorld(7);
   for (const key of ['one', 'two', 'three']) w.learn('partner', key);
   assert.equal(w.rel('partner').xp, 6);
-  assert.equal(completeSchoolLesson(w, lessonForDay(1), 'partner').xp, 0);
-  w.save.time.day = 2;
-  assert.equal(completeSchoolLesson(w, lessonForDay(2), 'partner').xp, 0, 'a capped lesson cannot move its award to tomorrow');
-  const w2 = makeWorld();
-  completeSchoolLesson(w2, lessonForDay(1), 'partner');
+  assert.equal(completeSchoolLesson(w, lessonForDay(7), 'partner').xp, 0);
+  w.save.time.day = 9;
+  assert.equal(completeSchoolLesson(w, lessonForDay(9), 'partner').xp, 0, 'a capped lesson cannot move its award to a later lesson day');
+  const w2 = makeWorld(7);
+  completeSchoolLesson(w2, lessonForDay(7), 'partner');
   for (const key of ['one', 'two', 'three']) w2.learn('partner', key);
   assert.equal(w2.rel('partner').xp, 6);
 });
@@ -93,7 +96,7 @@ test('many weeks of lesson memories never open the one-on-one level gate', () =>
   w.xp('partner', 100, { key: 'test-banked-xp' });
   assert.equal(w.level('partner'), 2);
   for (let week = 0; week < 40; week++) {
-    w.save.time.day = week * 7 + 1;
+    w.save.time.day = week * 7 + 2;
     const result = completeSchoolLesson(w, lessonForDay(w.day), 'partner');
     assert.equal(result.xp, 2);
     assert.deepEqual(result.memory.focus, []);
@@ -104,10 +107,10 @@ test('many weeks of lesson memories never open the one-on-one level gate', () =>
 });
 
 test('stale or out-of-period completion cannot pay or create a memory', () => {
-  const w = makeWorld();
-  assert.equal(completeSchoolLesson(w, lessonForDay(2), 'partner').completed, false);
+  const w = makeWorld(7);
+  assert.equal(completeSchoolLesson(w, lessonForDay(9), 'partner').completed, false);
   w.save.time.period = 1;
-  assert.equal(completeSchoolLesson(w, lessonForDay(1), 'partner').completed, false);
+  assert.equal(completeSchoolLesson(w, lessonForDay(7), 'partner').completed, false);
   assert.equal(w.save.memories.length, 0);
   assert.deepEqual(w.save.rel, {});
 });
