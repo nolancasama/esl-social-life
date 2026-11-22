@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MALL_SHOPS, WEEKLY_ALLOWANCE, mallItem, pocketMoney, buyMallItem, mallFloorFor } from './mall.js';
+import { MALL_SHOPS, WEEKLY_ALLOWANCE, mallItem, pocketMoney, buyMallItem, mallFloorFor,
+  MALL_FOOD_PRICES, MALL_MEAL_BITES, mallFoodPrice, buyMallFood, pendingMallMeal, biteMallMeal, finishMallMeal } from './mall.js';
+import { foodMesh } from '../engine/food.js';
+import { migrateSave, SAVE_VERSION } from './migrate.js';
 import { NpcManager } from '../game/npcs.js';
 import { CollisionWorld } from '../engine/collision.js';
 import { buildClass } from './generator.js';
@@ -112,6 +115,112 @@ test('buying cannot borrow money, and an unsuccessful purchase changes nothing',
   assert.equal(buyMallItem(save, 'pencils').ok, false);
   assert.equal(save.pocketMoney.balance, 0);
   assert.deepEqual(save.souvenirs, [], 'the activity owns shelf insertion');
+});
+
+test('mall food has fixed round prices, unknown food is rejected and water is free', () => {
+  assert.deepEqual(MALL_FOOD_PRICES, {
+    ramen: 500, spaghetti: 500, curry: 500, omurice: 500,
+    hamburger: 400, sandwich: 300, pizza: 400, sushi: 500,
+    riceball: 150, crepe: 400, icecream: 200, cake: 300,
+    pancakes: 400, water: 0,
+  });
+  for (const [id, price] of Object.entries(MALL_FOOD_PRICES)) {
+    assert.equal(mallFoodPrice(id), price);
+    assert.ok(id === 'water' || (price >= 150 && price <= 500 && price % 50 === 0));
+  }
+  assert.equal(mallFoodPrice('unknown'), null);
+  assert.equal(mallFoodPrice('__proto__'), null);
+  const save = { time: { day: 0 }, pocketMoney: { balance: 0, week: 0 } };
+  assert.equal(buyMallFood(save, 'unknown', 'bad').reason, 'unknown-food');
+  assert.equal(pendingMallMeal(save), null);
+  const bought = buyMallFood(save, 'water', 'free-water');
+  assert.equal(bought.ok, true);
+  assert.equal(bought.balance, 0);
+  assert.deepEqual(bought.meal, { id: 'free-water', foodId: 'water', bites: MALL_MEAL_BITES });
+});
+
+test('mall food requires the full price and never changes time, rewards or allowance rules', () => {
+  const save = { time: { day: 6, period: 1 }, pocketMoney: { balance: 499, week: 0 }, memories: [], rel: {}, stats: { activities: 0 } };
+  const before = structuredClone(save);
+  assert.equal(buyMallFood(save, 'ramen', 'meal-1').reason, 'not-enough');
+  assert.deepEqual(save, before);
+  save.pocketMoney.balance = 500;
+  assert.equal(buyMallFood(save, 'ramen', 'meal-1').balance, 0);
+  assert.equal(buyMallFood(save, 'ramen', 'meal-1').charged, false);
+  finishMallMeal(save, 'meal-1');
+  assert.equal(buyMallFood(save, 'riceball', 'meal-2').reason, 'not-enough');
+  assert.equal(save.pocketMoney.balance, 0);
+  assert.deepEqual(save.time, before.time);
+  assert.deepEqual(save.memories, before.memories);
+  assert.deepEqual(save.rel, before.rel);
+  assert.deepEqual(save.stats, before.stats);
+  save.time.day = 7;
+  assert.equal(pocketMoney(save), WEEKLY_ALLOWANCE);
+  assert.equal(pocketMoney(save), WEEKLY_ALLOWANCE);
+});
+
+test('pending meal re-serves after reload and receipts prevent charging a meal id twice', () => {
+  let save = { version: 3, time: { day: 0 }, pocketMoney: { balance: 1000, week: 0 } };
+  const paid = buyMallFood(save, 'sushi', 'solo-1');
+  assert.equal(paid.charged, true);
+  assert.equal(paid.balance, 500);
+  biteMallMeal(save, 'solo-1');
+  save = JSON.parse(JSON.stringify(save));
+  const served = buyMallFood(save, 'sushi', 'solo-1');
+  assert.equal(served.resumed, true);
+  assert.equal(served.charged, false);
+  assert.equal(served.balance, 500);
+  assert.equal(served.meal.bites, 3);
+  const otherOrder = buyMallFood(save, 'cake', 'solo-2');
+  assert.equal(otherOrder.meal.foodId, 'sushi', 'an unfinished dish blocks another order');
+  assert.equal(otherOrder.balance, 500);
+  assert.equal(biteMallMeal(save, 'wrong-id'), null);
+  assert.equal(finishMallMeal(save, 'wrong-id'), false);
+  for (let i = 0; i < 5; i++) biteMallMeal(save, 'solo-1');
+  assert.equal(pendingMallMeal(save).bites, 0);
+  assert.equal(finishMallMeal(save, 'solo-1'), true);
+  assert.equal(pendingMallMeal(save), null);
+  save = JSON.parse(JSON.stringify(save));
+  assert.equal(buyMallFood(save, 'sushi', 'solo-1').reason, 'already-paid');
+  assert.equal(save.pocketMoney.balance, 500);
+  assert.equal(finishMallMeal(save, 'solo-1'), false);
+  assert.equal(buyMallFood(save, 'icecream', 'solo-2').balance, 300);
+});
+
+test('v1-v3 migration preserves optional pending meals idempotently without a version bump', () => {
+  assert.equal(SAVE_VERSION, 3);
+  for (const version of [1, 2, 3]) {
+    const save = { version, time: { day: 3 }, mallMeal: { id: 'existing-paid', foodId: 'ramen', bites: 2 } };
+    migrateSave(save);
+    const before = structuredClone(save);
+    migrateSave(save);
+    assert.deepEqual(save, before);
+    assert.equal(buyMallFood(save, 'ramen', 'existing-paid').charged, false);
+    assert.equal(pocketMoney(save), WEEKLY_ALLOWANCE);
+    assert.equal(finishMallMeal(save, 'existing-paid'), true);
+    assert.equal(buyMallFood(save, 'ramen', 'existing-paid').reason, 'already-paid');
+    const legacy = { version, time: { day: 3 } };
+    migrateSave(legacy);
+    assert.equal(legacy.mallMeal, undefined, 'old saves do not acquire an unfinished meal');
+  }
+});
+
+test('every mall food supports four diminishing portions as one merged mesh and an empty dish', () => {
+  for (const id of Object.keys(MALL_FOOD_PRICES)) {
+    const full = foodMesh(id);
+    const empty = foodMesh(id, { left: 0 });
+    assert.ok(full.isMesh && empty.isMesh, `${id} keeps geometry callers compatible`);
+    assert.equal(full.userData.left, 1);
+    assert.equal(full.geometry.groups.length, 0, `${id} stays one draw call`);
+    assert.ok(full.geometry.attributes.position.count > empty.geometry.attributes.position.count, `${id} leaves a container after eating`);
+    const portions = [1, 0.75, 0.5, 0.25].map((left) => foodMesh(id, { left }));
+    for (let i = 1; i < portions.length; i++) {
+      const previous = portions[i - 1].geometry.attributes.position;
+      const next = portions[i].geometry.attributes.position;
+      assert.ok(next.count < previous.count || !Array.from(next.array).every((n, index) => n === previous.array[index]), `${id} visibly changes each bite`);
+    }
+    for (const mesh of [full, empty, ...portions]) mesh.geometry.dispose();
+  }
 });
 
 test('allowance arrives once per week and reloading or moving backwards never grants it again', () => {

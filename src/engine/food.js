@@ -3,18 +3,26 @@
 import * as THREE from 'three';
 import { StaticBuilder, G } from './builder.js';
 
-export function foodMesh(id) {
+export function foodMesh(id, { left = 1 } = {}) {
+  left = Number.isFinite(left) ? Math.max(0, Math.min(1, left)) : 1;
+  const dish = new StaticBuilder();
   const b = new StaticBuilder();
-  b.cyl(0.2, 0.17, 0.025, '#FFFFFF', 0, 0, 0, { seg: 16 });
+  dish.cyl(0.2, 0.17, 0.025, '#FFFFFF', 0, 0, 0, { seg: 16 });
   switch (id) {
     case 'ramen':
-      b.cyl(0.17, 0.11, 0.13, '#DF8D73', 0, 0.025, 0, { seg: 14 });
+      // Open bowl: the broth and noodles can visibly fall below the rim.
+      dish.add(new THREE.CylinderGeometry(0.17, 0.11, 0.13, 14, 1, true), '#DF8D73', { y: 0.09 });
+      dish.add(G.torus(0.167, 0.008, 4, 14), '#DF8D73', { y: 0.155, rx: Math.PI / 2 });
       b.cyl(0.15, 0.15, 0.015, '#F8D68D', 0, 0.155, 0, { seg: 14 });
       for (const dx of [-0.06, 0, 0.06]) b.box(0.015, 0.01, 0.18, '#FFF1BE', dx, 0.17, 0);
       b.sphere(0.035, '#77B978', 0.07, 0.18, 0.05);
       break;
     case 'sushi':
-      for (const dx of [-0.08, 0.08]) { b.box(0.11, 0.055, 0.17, '#FFFFFF', dx, 0.025, 0); b.box(0.12, 0.03, 0.19, '#F3967B', dx, 0.08, 0); }
+      for (const [i, [dx, dz]] of [[-0.075, -0.07], [0.075, -0.07], [-0.075, 0.07], [0.075, 0.07]].entries()) {
+        if (i >= Math.ceil(left * 4)) continue;
+        b.box(0.105, 0.055, 0.09, '#FFFFFF', dx, 0.025, dz);
+        b.box(0.115, 0.03, 0.10, '#F3967B', dx, 0.08, dz);
+      }
       break;
     case 'crepe':
       b.cone(0.1, 0.22, '#E6BB7A', 0, 0.035, 0, { rz: Math.PI, seg: 10 });
@@ -48,7 +56,7 @@ export function foodMesh(id) {
       b.cyl(0.08, 0.1, 0.006, '#A0522D', 0, 0.123, 0, { seg: 12 });
       break;
     case 'icecream':
-      b.cyl(0.07, 0.04, 0.08, '#C9E4F5', 0, 0.02, 0, { seg: 12 });
+      dish.cyl(0.07, 0.04, 0.08, '#C9E4F5', 0, 0.02, 0, { seg: 12 });
       b.sphere(0.06, '#FFC9DE', 0, 0.13, 0);
       b.sphere(0.055, '#FFF3B0', 0.045, 0.17, 0.01);
       b.sphere(0.02, '#E63946', 0, 0.2, 0);
@@ -69,14 +77,40 @@ export function foodMesh(id) {
       b.box(0.1, 0.01, 0.02, '#D7263D', 0, 0.105, 0);
       break;
     case 'riceball':
-      b.add(new THREE.CylinderGeometry(0.095, 0.095, 0.06, 3), '#FFFFFF', { y: 0.1, rx: -Math.PI / 2 });
-      b.box(0.07, 0.05, 0.065, '#2B3A2E', 0, 0.03, 0);
+      for (const [i, [x, z]] of [[-0.065, -0.065], [0.065, -0.065], [-0.065, 0.065], [0.065, 0.065]].entries()) {
+        if (i >= Math.ceil(left * 4)) continue;
+        b.add(new THREE.CylinderGeometry(0.06, 0.06, 0.045, 3), '#FFFFFF', { x, y: 0.08, z, rx: -Math.PI / 2 });
+        b.box(0.04, 0.035, 0.05, '#2B3A2E', x, 0.03, z);
+      }
+      break;
+    case 'water':
+      dish.add(new THREE.CylinderGeometry(0.075, 0.06, 0.19, 12, 1, true), '#DBECF3', { y: 0.12 });
+      dish.add(G.torus(0.075, 0.006, 4, 12), '#FFFFFF', { y: 0.215, rx: Math.PI / 2 });
+      b.cyl(0.068, 0.058, 0.15, '#73C7ED', 0, 0.03, 0, { seg: 12 });
       break;
     default:
       b.sphere(0.08, '#F4A261', 0, 0.05, 0);
   }
-  const m = b.build();
+  // Keep the container full-size. Only the edible portion changes, then all
+  // geometry is merged into the same single draw call as the original model.
+  const pieces = id === 'sushi' || id === 'riceball';
+  for (const part of b.parts) {
+    if (left === 0) { part.dispose(); continue; }
+    if (!pieces) {
+      const liquid = id === 'ramen' || id === 'water';
+      const scale = Math.cbrt(left);
+      const radius = id === 'ramen' ? 0.75 + 0.25 * left : liquid ? 1 : scale;
+      const base = id === 'icecream' ? 0.1 : 0.025;
+      part.translate(0, -base, 0);
+      part.scale(radius, liquid ? left : scale, radius);
+      part.translate(0, base, 0);
+    }
+    dish.parts.push(part);
+  }
+  b.parts = [];
+  const m = dish.build();
   m.matrixAutoUpdate = true;
+  m.userData = { foodId: id, left };
   return m;
 }
 

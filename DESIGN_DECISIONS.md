@@ -151,6 +151,38 @@ floor changes. `e2e:mall` is extended per phase; perf covers all three floors.
   geometry; the original sixteen available seats, including T2, remain intact.
   Arcade machine anchors are exported for later interactions with no prompts yet.
 
+**Phase 2 implementation (2026-11-22)**
+- Mall food uses fixed prices (¥150–¥500), with free water available at every
+  counter. Payment and the optional `mallMeal: { id, foodId, bites }` are saved
+  together at hand-over. Optional `mallMealReceipts` retain completed ids as well,
+  so replaying a hand-over cannot charge for an already finished meal. No save
+  version bump; v1–v3 migrations preserve the optional fields idempotently.
+- Counter cards show prices; an optional price question explains both price and
+  balance. Insufficient funds offers affordable foods and free water. A pending
+  dish is re-served with its remaining portion after a reload or leaving the floor;
+  a carrying player is reminded to sit and eat instead of ordering again.
+- Solo meals attach a level tray/handheld prop to the existing character root and
+  use the existing hold pose. Only unoccupied seats in the original sixteen-seat
+  pool get a walk-up action and a merged highlight; decorative diners' tables
+  remain excluded. The existing seat height/sit pose places each dish on the
+  table, and completion stands the player beside the seat. No solo time, XP or
+  memories are added.
+- One shared presentation helper drives four bites, pause-aware timing, portions,
+  Skip and cleanup for solo and group meals. Each dish remains one merged mesh:
+  containers keep their size, ramen/water levels drop, sushi/rice-ball pieces
+  disappear, and other portions shrink. The existing `foodMesh(id)` API still
+  works. Group diners keep T2 assignments, eat at different offsets/intervals,
+  and react with existing happy gestures; only the player's order uses the wallet.
+  The existing reward path and optional 1F shop visit are unchanged.
+- `window.__esl.mallMeal` is a frozen semantic snapshot, including pending id,
+  food, bites, portion, carrying/seated state, phase, actual dish count and frozen
+  per-diner food/seat/portion records. The mall harness uses this state for bite
+  progression and cleanup, with explicit preconditions and external screenshot
+  paths. `MALL_HARNESS_BROKEN_ASSERTION=1` selects a deliberately wrong ramen
+  price for the controller's pass/fail trust proof. Acceptance runs, perf, visual
+  evidence and that trust proof remain controller-owned for this delivery.
+- Arcade play and outing activity selection remain Phases 3 and 4.
+
 ## 2026-11-19 — School day: music room, gym and art room
 
 - **What:** Three new school rooms (music room, gym, art room; one shared

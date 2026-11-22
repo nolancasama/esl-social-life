@@ -1,6 +1,35 @@
 # Current State
 
-## Niji Mall Phase 1 (2026-11-22, uncommitted)
+## Niji Mall Phase 2 (2026-11-22, committed)
+- Paid food on 2F now leads to a carried tray/handheld meal, highlighted free
+  table seats, four visibly diminishing bites, Skip, a delicious choice, cleared
+  dishes and a standing player in explore mode. Solo meals preserve time, XP and
+  memories. Every counter has free water and an affordable fallback path.
+- Food prices and payment reuse the existing wallet/allowance. Optional pending
+  meals and completed receipts prevent duplicate charges; reloading or leaving
+  the floor leaves the same remaining portion ready at the counter. Save v3 and
+  idempotent v1–v3 migration remain unchanged. The café stays free.
+- Group meals use the same portion helper, individual dishes and staggered bites
+  with reactions. The player pays only for their own food. Existing T2 seats,
+  one-period reward path, group focus and optional 1F shop visit are preserved.
+- Read-only semantic state: `window.__esl.mallMeal` (frozen snapshot and diner
+  records), alongside Phase 1's `mallTravel`. `scripts/mall.mjs` extends the real
+  UI coverage and writes the five requested meal frames under external
+  `SHOTS_DIR`. The deliberately wrong price check is enabled only with
+  `MALL_HARNESS_BROKEN_ASSERTION=1` for the controller's trust proof.
+- Validation (Claude, 2026-11-22): `npm test` 99/99, build, `e2e:mall` (twice),
+  `e2e:perf` (mall 16, mall2 26, mall3 16 of 90 draw calls) and `e2e` all PASS.
+  Harness trust: `MALL_HARNESS_BROKEN_ASSERTION=1` fails with exit 1 on the ramen
+  price check. Screenshots inspected (carrying tray, solo ramen mid-meal with
+  Skip, group table with each friend's own dish):
+  `%TEMP%\esl-mall-p2-review\`. Claude capped `mallMealReceipts` at 20 ids.
+- Changed files: `src/world/mall.js`, `src/world/mall.test.mjs`,
+  `src/engine/food.js`, `src/activities/mall.js`, `src/activities/mall-meal.js`,
+  `src/activities/mall-meal.test.mjs`, `src/activities/mall-order.test.mjs`,
+  `src/game/game.js`, `scripts/mall.mjs`, this file and `DESIGN_DECISIONS.md`.
+- Phases 3–4 remain unimplemented.
+
+## Niji Mall Phase 1 (2026-11-22, committed as ae0bc7b)
 - Three connected floor scenes: `mall` (1F Shopping), `mall2` (2F Food Court),
   `mall3` (3F Game Center shell). All share location `mall`, retain floor names,
   and have escalators, an elevator, directories and clear named arrival spawns.

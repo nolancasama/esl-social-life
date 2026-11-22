@@ -15,6 +15,7 @@ import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
 import { buildMusicRoom, buildGym, buildArtRoom } from '../engine/scenes/schoolrooms.js';
 import { lessonForDay } from '../world/school.js';
 import { runSchoolLesson } from '../activities/school.js';
+import { mallMealSnapshot, mallSeatInteractions, updateMallMeal, eatSoloMallMeal } from '../activities/mall-meal.js';
 import { souvenirMesh } from '../engine/food.js';
 import { DialogueUI } from '../dialogue/ui.js';
 import { talkToNpc } from '../dialogue/talk.js';
@@ -129,6 +130,7 @@ export class Game {
   /** Read-only friendship state for tests (`window.__esl.friendship`). */
   get friendship() { return snapshot(this.world); }
   get music() { return musicSnapshot(); }
+  get mallMeal() { return mallMealSnapshot(this); }
 
   portrait(npc) { return this.portraitFn(npc.look, npc.id + ':' + (npc.lookSeed || 0)); }
   playerPortrait() { return this.portraitFn(this.world.save.player.look, 'player:' + JSON.stringify(this.world.save.player.look).length + this.world.save.player.look.hairStyle + this.world.save.player.look.topColor); }
@@ -349,6 +351,7 @@ export class Game {
   update(dt) {
     if (this.paused) return;
     this.time += dt;
+    updateMallMeal(this, dt);
     const mode = this.mode;
     if (mode === 'explore') {
       this.player.update(dt, this.input.axis(), true);
@@ -425,7 +428,7 @@ export class Game {
   }
 
   // ------------------------------------------------------------ interaction
-  _interactables() { return [...(this.scene?.interact || []), ...this.extraInteract]; }
+  _interactables() { return [...(this.scene?.interact || []), ...this.extraInteract, ...mallSeatInteractions(this)]; }
 
   _updateTarget() {
     const p = this.player;
@@ -543,6 +546,7 @@ export class Game {
       case 'friendhouse': return this._friendHouseDoor();
       case 'mallShop': return this.activities.mallShop(it);
       case 'mallFood': return this.activities.mallCounter(it);
+      case 'mallSeat': return eatSoloMallMeal(this, it.seatId);
       case 'mallEscalator': return this.changeFloor(it.floor, it.via);
       case 'mallElevator': {
         const floor = MALL_FLOORS.indexOf(this.sceneId) + 1;
