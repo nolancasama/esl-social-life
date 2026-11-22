@@ -1,10 +1,13 @@
 # Current State
 
-## Niji Mall three floors (2026-11-22, branch `niji-mall-floors`, not merged)
+## Niji Mall three floors (2026-11-22, live)
 Design review and all phase notes: DESIGN_DECISIONS.md → 2026-11-22. Phase 1
 `ae0bc7b` and Phase 2 `edfbd94` were built by Codex and reviewed by Claude;
-Phases 3–4 were built by Claude directly at the user's request (Codex hit a
-usage limit). Not yet merged to `main` or deployed.
+Phases 3–4 (`29ad715`) were built by Claude directly at the user's request
+(Codex hit a usage limit). Fast-forwarded to `main` and deployed to GitHub
+Pages on 2026-11-22 (gh-pages `f6be597`); the live page serves the new build.
+Local `main` is still the stale worktree at `428f2e3` (see Next Steps 5);
+`origin/main` is current.
 - **Floors:** scenes `mall` (1F Shopping), `mall2` (2F Food Court), `mall3` (3F
   Game Center); all are location `mall`. Escalators, an elevator panel and a
   directory on every floor; `game.changeFloor` never advances time and carries
@@ -174,9 +177,9 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - School rooms (perf: 118-119 of 150 draw calls each): classmates stand in loose spots around the room during the lesson; in the gym the teacher stands behind the catch partner. Fine for now; polish if playtests show it matters.
 
 ## Next Steps
-0. Niji Mall three floors: user review, then merge `niji-mall-floors` to `main`
-   and deploy. On a Chromebook check the arcade touch buttons (hold to steer),
-   crane difficulty (3 tries, grip radius 0.065) and race length (~21 s).
+0. Niji Mall three floors is live. On a Chromebook check the arcade touch
+   buttons (hold to steer), crane difficulty (3 tries, grip radius 0.065) and
+   race length (~21 s).
 1. Play on a classroom Chromebook: frame rate with groups and visits, touch on the composer cards, read-aloud quality.
 2. Playtest pacing: how many days to Lv3, Lv4 and Lv5 with one-on-one memories; whether 2 event offers a day feels right; whether soft approaches feel welcome rather than intrusive.
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
