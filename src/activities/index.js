@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { playBall } from './ballplay.js';
 import { playCafe } from './cafe.js';
 import { playMall, shopAtMall, orderAtMall } from './mall.js';
+import { playArcadeMachine } from './arcade.js';
 import { Conversation, opt } from '../dialogue/runner.js';
 import { line } from '../dialogue/lines.js';
 import { PHRASES } from '../dialogue/intent.js';
@@ -69,6 +70,7 @@ export class Activities {
   startDirections(actor, event) { return guideVisitor(this.game, actor, event); }
   mallShop(target) { return shopAtMall(this.game, target); }
   mallCounter(target) { return orderAtMall(this.game, target); }
+  arcade(target) { return playArcadeMachine(this.game, target); }
 
   /** Best-friend milestone (an event activity with its own scene). */
   runMilestone(actor, event, plan) {

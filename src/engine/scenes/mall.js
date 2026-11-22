@@ -24,6 +24,15 @@ export const MALL_ARCADE_POSITIONS = Object.freeze({
   crane: Object.freeze({ x: -2.4, z: -4.8, yaw: 0 }),
   rhythm: Object.freeze({ x: 3.0, z: -4.8, yaw: 0 }),
 });
+// Where a player stands to play: just in front of each cabinet's collision
+// (the racing seat reaches z + 1.8, the crane box z + 0.8, the rhythm pads z + 1.1).
+const ARCADE_FRONT = { racing: 2.35, crane: 1.45, rhythm: 1.65 };
+export const MALL_ARCADE_STANDS = Object.freeze(Object.fromEntries(Object.entries(MALL_ARCADE_POSITIONS).map(([id, p]) => [id, Object.freeze({ x: p.x, z: p.z + ARCADE_FRONT[id] })])));
+const ARCADE_LABELS = {
+  racing: { icon: '🏎️', en: 'Racing Game', ja: 'レースゲーム' },
+  crane: { icon: '🧸', en: 'Crane Game', ja: 'クレーンゲーム' },
+  rhythm: { icon: '🥁', en: 'Rhythm Game', ja: 'リズムゲーム' },
+};
 
 const FLOOR_NAMES = {
   1: { en: '1F Shopping', ja: '1かい ショッピング' },
@@ -73,14 +82,14 @@ function buildMallFloor(floor) {
   b.box(2.4, 3.3, 0.2, wallColor, 11.0, 0, R.maxZ + 0.1);
   b.box(2.4, 0.18, 0.24, '#75ACA9', 11.0, 0, R.maxZ + 0.1);
   b.flat(48, 40, '#263B46', 0, -0.04, 0);
-  b.flat(24, 15, floor === 3 ? '#4C537C' : '#F4EBD8', 0, 0, 0.5);
+  b.flat(24, 15, floor === 3 ? '#565D8E' : '#F4EBD8', 0, 0, 0.5);
   // Large terrazzo tiles stay inside the merged mesh, including their grout.
   for (let x = -11; x <= 11; x += 2) for (let z = -6; z <= 7; z += 2) {
-    const colors = floor === 3 ? ['#62698D', '#555C82'] : floor === 2 ? ['#F8EEDB', '#EDDCC4'] : ['#F6EFDF', '#EDE6D5'];
+    const colors = floor === 3 ? ['#6A70A6', '#5D6399'] : floor === 2 ? ['#F8EEDB', '#EDDCC4'] : ['#F6EFDF', '#EDE6D5'];
     b.flat(1.96, 1.96, colors[Math.abs((x + z + 17) / 2) % 2 ? 0 : 1], x, 0.004, z);
   }
-  b.flat(13.2, 10.5, floor === 3 ? '#6B6291' : floor === 2 ? '#F0D6AD' : '#DEECE1', -0.25, 0.008, 2.6);
-  b.flat(4.2, 5.6, floor === 3 ? '#5B7891' : '#DAEBE6', 9.3, 0.009, 5.1);
+  b.flat(13.2, 10.5, floor === 3 ? '#7B62A6' : floor === 2 ? '#F0D6AD' : '#DEECE1', -0.25, 0.008, 2.6);
+  b.flat(4.2, 5.6, floor === 3 ? '#5E86A8' : '#DAEBE6', 9.3, 0.009, 5.1);
 
   // Three pocket shops, each with its own canopy, counter and display shelves.
   for (const [i, s] of (floor === 1 ? MALL_SHOPS : []).entries()) {
@@ -88,16 +97,40 @@ function buildMallFloor(floor) {
     b.flat(4.6, 3.4, ['#F9E6DB', '#E5EFE1', '#F7EDCE'][i], s.x, 0.012, z);
     for (const dx of [-2.35, 2.35]) b.box(0.16, 2.85, 3.6, '#E7D9BF', s.x + dx, 0, -5.2, { collide: true });
     b.box(4.65, 0.32, 0.65, s.color, s.x, 2.58, -3.5);
-    for (let k = 0; k < 9; k++) b.box(0.24, 0.12, 0.67, '#FFF8E8', s.x - 2.0 + k * 0.5, 2.45, -3.49);
+    // Each storefront has its own face: a scalloped toy awning, a wooden
+    // bookshop frame, a striped sports awning with a turf mat.
+    if (s.id === 'toys') {
+      for (let k = 0; k < 9; k++) b.sphere(0.2, k % 2 ? s.color : '#FFF8E8', s.x - 2.0 + k * 0.5, 2.5, -3.2, { sy: 0.55 });
+    } else if (s.id === 'books') {
+      for (const dx of [-2.22, 2.22]) b.box(0.22, 2.58, 0.24, '#B98A5C', s.x + dx, 0, -3.3);
+      b.box(4.65, 0.14, 0.3, '#9C6E47', s.x, 2.44, -3.22);
+    } else {
+      for (let k = 0; k < 9; k++) b.box(0.24, 0.12, 0.67, '#FFF8E8', s.x - 2.0 + k * 0.5, 2.45, -3.49);
+      b.flat(2.2, 1.0, '#7CB874', s.x, 0.014, -2.75);
+    }
     b.box(3.5, 0.9, 0.7, s.color, s.x, 0, -3.65, { collide: true });
     b.box(3.6, 0.07, 0.81, '#FFF9E8', s.x, 0.9, -3.65);
     b.box(0.4, 0.24, 0.29, '#435A66', s.x + 1.18, 0.97, -3.68);
-    // Pale blue framed side windows leave the counter and browsing path open.
-    for (const dx of [-1.96, 1.96]) {
-      b.box(0.62, 1.2, 0.09, '#AED8DA', s.x + dx, 0.7, -3.58);
-      b.box(0.7, 0.08, 0.16, '#FFF8E8', s.x + dx, 0.65, -3.54);
-      b.box(0.05, 1.35, 0.12, '#FFF8E8', s.x + dx, 0.6, -3.51);
-      b.sphere(0.16, ['#E9B966', '#9CACC9', '#E38F9E'][i], s.x + dx, 0.95, -3.45);
+    // Display windows either side of the counter, each showing the shop's goods.
+    for (const [w, dx] of [-1.96, 1.96].entries()) {
+      const wx = s.x + dx;
+      b.box(0.62, 1.2, 0.09, '#AED8DA', wx, 0.7, -3.58);
+      b.box(0.7, 0.08, 0.16, '#FFF8E8', wx, 0.65, -3.54);
+      b.box(0.05, 1.35, 0.12, '#FFF8E8', wx, 0.6, -3.51);
+      if (s.id === 'toys' && !w) { // a toy robot
+        b.box(0.26, 0.26, 0.16, '#7EB7CD', wx, 0.75, -3.42); b.box(0.22, 0.18, 0.16, '#A6D7E6', wx, 1.02, -3.42);
+        for (const ex of [-0.05, 0.05]) b.sphere(0.022, '#2E3440', wx + ex, 1.12, -3.33);
+      } else if (s.id === 'toys') { // a teddy bear
+        b.sphere(0.15, '#C9925E', wx, 0.88, -3.42); b.sphere(0.11, '#C9925E', wx, 1.1, -3.42);
+        for (const ex of [-0.08, 0.08]) b.sphere(0.045, '#C9925E', wx + ex, 1.2, -3.42);
+      } else if (s.id === 'books') { // stacked books and a standing one
+        for (let k = 0; k < 3; k++) b.box(0.36 - k * 0.04, 0.07, 0.24, ['#E07A5F', '#81B29A', '#F2CC8F'][k], wx, 0.73 + k * 0.07, -3.42);
+        b.box(0.24, 0.32, 0.04, ['#5E81AC', '#B48EAD'][w], wx, 0.94, -3.42, { rx: -0.2 });
+      } else if (!w) { // a mannequin in a team shirt
+        b.box(0.3, 0.36, 0.14, s.color, wx, 0.78, -3.42); b.box(0.46, 0.1, 0.14, s.color, wx, 1.04, -3.42); b.sphere(0.09, '#EDE3D4', wx, 1.24, -3.42);
+      } else { // a soccer ball on a stand
+        b.cyl(0.05, 0.08, 0.2, '#8E9FAF', wx, 0.7, -3.42, { seg: 8 }); b.sphere(0.16, '#FFFFFF', wx, 1.04, -3.42); b.sphere(0.06, '#2E3440', wx, 1.1, -3.29);
+      }
     }
     b.box(4.25, 0.11, 0.4, '#C39A6D', s.x, 0.8, -6.6);
     b.box(4.25, 0.11, 0.4, '#C39A6D', s.x, 1.65, -6.6);
@@ -120,7 +153,7 @@ function buildMallFloor(floor) {
         b.box(0.6, 0.18, 0.12, color, x, 2.09, -6.52);
       }
     }
-    const sign = signMesh(4.2, 0.47, { bg: s.color, lines: [{ text: `${s.en}  ${s.ja}`, size: 34, color: '#243F50' }] });
+    const sign = signMesh(4.2, 0.62, { bg: s.color, lines: [{ text: s.en, size: 92, color: '#243F50', y: 0.36 }, { text: s.ja, size: 64, color: '#243F50', y: 0.8 }] });
     sign.position.set(s.x, 2.76, -3.15);
     root.add(sign);
   }
@@ -221,12 +254,25 @@ function buildMallFloor(floor) {
   if (floor === 1) {
     for (const x of [-8.2, -3.5, 1.2]) bench(b, x, 4.8, Math.PI, '#BF9976');
     for (const x of [-10.5, 3.8]) planter(b, x, 2.8);
+    // Capsule-toy machines: a small, colourful island in the open corridor.
+    for (const [k, x] of [-5.4, -4.6, -3.8, -3.0].entries()) {
+      const c = ['#E98BB6', '#5FC4C2', '#F2C453', '#A889E6'][k];
+      b.box(0.62, 0.78, 0.5, c, x, 0, 2.1, { collide: true });
+      b.box(0.2, 0.12, 0.06, '#3A3F5C', x, 0.45, 2.37);
+      b.sphere(0.27, '#E4F2F7', x, 1.05, 2.1);
+      for (const [j, [dx, dy]] of [[-0.1, -0.08], [0.09, -0.1], [0, 0.04], [-0.07, 0.12], [0.1, 0.08]].entries()) b.sphere(0.075, ['#FF8FA3', '#FFD166', '#74C0FC', '#69DB7C', '#B197FC'][(j + k) % 5], x + dx, 1.05 + dy, 2.1);
+      b.box(0.66, 0.06, 0.54, '#FFF8E8', x, 1.32, 2.1);
+    }
+    // Shoppers looking in the display windows.
+    for (const [k, [x, color]] of [[-9.4, '#F08C6A'], [-0.55, '#6FA8DC'], [4.45, '#9C7BC9']].entries()) {
+      staticStander(b, x, -2.8, Math.PI, color, k + 1);
+      b.collideCircle(x, -2.8, 0.3, 1.6);
+    }
   } else if (floor === 2) {
     for (const x of [-10.8, 4.5]) planter(b, x, -3.1);
     bench(b, 6.8, 7.15, Math.PI, '#B9936D');
-  } else {
-    arcadeShell(b, root);
   }
+  const blink = floor === 3 ? arcadeShell(b, root) : null;
   const navigation = circulation(b, root, floor);
 
   root.add(b.build());
@@ -234,6 +280,7 @@ function buildMallFloor(floor) {
   lights.hemi.color.set('#FFF8E6');
   lights.hemi.intensity = 2.1;
   lights.sun.intensity = 1.3;
+  if (floor === 3) { lights.hemi.color.set('#F3EEFF'); lights.hemi.intensity = 2.45; }
   const collision = new CollisionWorld({ bounds: { ...R, maxX: R.maxX + 0.8 } });
   collision.boxes.push(...b.boxes);
   collision.circles.push(...b.circles);
@@ -245,7 +292,12 @@ function buildMallFloor(floor) {
     ...(floor === 1 ? [{ id: 'mallExit', x: 11.65, z: 5.6, r: 1.2, kind: 'door', to: 'town', icon: '🚪', label: { en: 'Door', ja: 'ドア' } }] : []),
     ...(floor === 1 ? MALL_SHOPS : []).map((s) => ({ id: s.id, shop: s.id, x: s.x, z: s.z, r: 1.25, kind: 'mallShop', icon: '🛍️', label: { en: s.en, ja: s.ja } })),
     ...foodCounters.map((c) => ({ id: c.id, counter: c.id, x: c.front.x, z: c.front.z, r: 1.2, kind: 'mallFood', icon: '🍽️', label: { en: c.en, ja: c.ja } })),
+    ...(floor === 3 ? Object.entries(MALL_ARCADE_STANDS).map(([game, s]) => ({ id: `arcade-${game}`, game, kind: 'arcade', x: s.x, z: s.z, r: 1.2, icon: ARCADE_LABELS[game].icon, label: { en: ARCADE_LABELS[game].en, ja: ARCADE_LABELS[game].ja } })) : []),
   ];
+  if (floor === 3) {
+    // Classmates who like games stand at the decorative cabinets as if playing.
+    for (const [i, x] of [-9, -6.3, -3.6, -0.9].entries()) spots.push({ id: `arcade-play-${i}`, x, z: 4.35, yaw: Math.PI, kind: 'stand', zone: 'room', tags: ['games'] });
+  }
   return {
     id, name: FLOOR_NAMES[floor], floor, root, collision, spots,
     groups: floor === 2 ? [{ id: 'mallDiningEast', x: 5.7, z: 1.5, r: 0.6, zone: 'room' }, { id: 'mallDiningWest', x: -5.0, z: 3.2, r: 0.7, zone: 'room' }] : [{ id: 'mallAtrium', x: 5.7, z: 4.2, r: 0.6, zone: 'room' }, { id: 'mallShops', x: -0.2, z: -1.9, r: 0.7, zone: 'room' }],
@@ -254,9 +306,11 @@ function buildMallFloor(floor) {
     staffSpot: foodCounters.find((c) => c.id === 'sweets')?.staff,
     counterSpot: foodCounters.find((c) => c.id === 'sweets')?.front,
     arcadePositions: floor === 3 ? MALL_ARCADE_POSITIONS : undefined,
+    arcadeStands: floor === 3 ? MALL_ARCADE_STANDS : undefined,
     camera: { mode: 'room', yaw: 0, pitch: 0.82, dist: 20.0, center: { x: 0, z: 0.9 }, follow: 0.5, bounds: { minX: -10.8, maxX: 10.8, minZ: -5.5, maxZ: 13 } },
     ambience: () => ({ background: new THREE.Color('#263B46'), fog: null }),
-    update: () => {},
+    // Marquee bulbs swap twice a second: two small meshes, no per-frame geometry.
+    update: (dt, time = 0) => { if (blink) { const on = Math.floor(time * 2) % 2 === 0; blink[0].visible = on; blink[1].visible = !on; } },
   };
 }
 
@@ -336,50 +390,98 @@ function circulation(b, root, floor) {
   return interact;
 }
 
+// A standing figure in merged geometry: shoppers browsing and arcade players.
+function staticStander(b, x, z, yaw, color, i) {
+  const skin = ['#E9B88D', '#BD875F', '#F2CEAA', '#D7A27A'][i % 4];
+  const parts = new StaticBuilder();
+  for (const dx of [-0.1, 0.1]) parts.box(0.14, 0.62, 0.17, '#48536E', dx, 0, 0);
+  parts.box(0.4, 0.52, 0.27, color, 0, 0.62, 0);
+  for (const dx of [-0.25, 0.25]) parts.box(0.12, 0.44, 0.14, skin, dx, 0.7, 0.06, { rx: -0.35 });
+  parts.sphere(0.22, skin, 0, 1.38, 0, { sy: 1.1 });
+  parts.sphere(0.225, ['#544638', '#34313E', '#855B42', '#43383B'][i % 4], 0, 1.49, -0.035, { sy: 0.65 });
+  for (const dx of [-0.075, 0.075]) parts.sphere(0.02, '#3B3540', dx, 1.39, 0.2);
+  const geometry = parts.buildGeometry();
+  geometry.rotateY(yaw);
+  geometry.translate(x, 0, z);
+  b.parts.push(geometry);
+}
+
+/** 3F Game Center. Returns the two alternating marquee-bulb meshes. */
 function arcadeShell(b, root) {
+  const bulbs = [new StaticBuilder(), new StaticBuilder()];
+  const bulbRow = (x0, x1, y, z, n) => { for (let k = 0; k < n; k++) bulbs[k % 2].sphere(0.055, ['#FFF27A', '#FF9AD5', '#8AF0FF'][k % 3], x0 + (x1 - x0) * (k / (n - 1)), y, z); };
   for (const [i, pos] of Object.values(MALL_ARCADE_POSITIONS).entries()) {
-    const { x, z } = pos, color = ['#70B9D4', '#E5A0C1', '#AE9BD8'][i];
-    b.flat(3.8, 3.7, ['#5986AA', '#A86F9C', '#8575AB'][i], x, 0.014, z + 0.5);
+    const { x, z } = pos, color = ['#5FC2E8', '#F28DC0', '#B49BF0'][i];
+    // A lit floor pad under each machine marks it as playable.
+    b.flat(3.8, 3.7, ['#4E8FC4', '#C2669E', '#8A6CC8'][i], x, 0.014, z + 0.7);
+    b.flat(3.5, 3.4, ['#6FB2E2', '#E58BBF', '#A88EE0'][i], x, 0.016, z + 0.7);
     if (i === 0) {
       b.box(2.3, 1.35, 0.8, color, x, 0, z, { collide: true });
-      b.box(1.8, 0.85, 0.1, '#2F4058', x, 1.35, z + 0.43);
-      b.box(1.5, 0.05, 0.04, '#9DE0DA', x, 1.7, z + 0.49);
+      b.box(2.4, 0.5, 0.9, '#3E5D8C', x, 1.95, z);
+      b.box(1.8, 0.85, 0.1, '#22304A', x, 1.1, z + 0.43);
+      // Screen: a road and two little cars.
+      b.box(0.5, 0.78, 0.02, '#5D6170', x, 1.13, z + 0.49);
+      b.box(0.1, 0.1, 0.03, '#E5534B', x - 0.1, 1.3, z + 0.5);
+      b.box(0.1, 0.1, 0.03, '#5C7CFA', x + 0.1, 1.55, z + 0.5);
       b.box(1.2, 0.45, 1.3, '#536A8C', x, 0, z + 1.15, { collide: true });
       b.box(1.0, 0.65, 0.25, color, x, 0.4, z + 1.7);
       b.add(G.torus(0.24, 0.045, 6, 12), '#E7C76C', { x, y: 1.03, z: z + 0.7, rx: -0.55 });
     } else if (i === 1) {
       b.box(2.25, 0.68, 1.6, color, x, 0, z, { collide: true });
-      b.box(2.25, 0.18, 1.6, color, x, 2.25, z);
-      b.box(2.0, 1.55, 0.1, '#ADCEDB', x, 0.68, z - 0.7);
-      for (const dx of [-1.05, 1.05]) b.box(0.09, 1.65, 1.5, '#D5E7EB', x + dx, 0.65, z);
-      for (const dx of [-0.65, 0, 0.65]) { b.sphere(0.23, ['#E9B75E', '#9DBF94', '#C398BE'][Math.round((dx + 0.65) / 0.65)], x + dx, 0.92, z); }
+      b.box(2.35, 0.32, 1.7, color, x, 2.25, z);
+      // An open front frame (no opaque pane) keeps the prizes visible.
+      b.box(2.0, 0.08, 0.06, '#E9F4F8', x, 0.68, z + 0.78);
+      b.box(2.0, 0.08, 0.06, '#E9F4F8', x, 2.17, z + 0.78);
+      for (const dx of [-1.08, 1.08]) b.box(0.09, 1.65, 1.55, '#D5E7EB', x + dx, 0.65, z);
+      for (const [j, dx] of [-0.65, 0, 0.65].entries()) {
+        b.sphere(0.23, ['#C9925E', '#F2C26B', '#86C28B'][j], x + dx, 0.92, z - 0.25);
+        b.sphere(0.2, ['#F4D9E3', '#F7D84B', '#F6B94A'][j], x + dx * 0.8, 0.9, z + 0.3);
+      }
       b.cyl(0.035, 0.035, 0.5, '#718999', x, 1.67, z, { seg: 6 });
       for (const dx of [-0.14, 0.14]) b.box(0.06, 0.3, 0.06, '#718999', x + dx, 1.4, z, { rz: dx });
+      b.box(0.5, 0.5, 0.4, '#3A3F5C', x + 0.78, 0.18, z + 0.62);
     } else {
       b.box(2.2, 2.15, 0.9, color, x, 0, z, { collide: true });
-      b.box(1.75, 1.1, 0.08, '#354363', x, 0.92, z + 0.49);
+      b.box(1.75, 1.1, 0.08, '#2A3352', x, 0.92, z + 0.49);
       for (const [j, c] of ['#F2B0BD', '#F1D47D', '#7FD3CF'].entries()) {
         b.box(0.4, 0.22, 0.05, c, x - 0.52 + j * 0.52, 1.2 + j * 0.14, z + 0.55);
         b.cyl(0.27, 0.27, 0.07, c, x - 0.6 + j * 0.6, 0.65, z + 0.9, { seg: 12 });
       }
       b.box(2.2, 0.4, 0.8, '#596988', x, 0.2, z + 0.7, { collide: true });
     }
-    const titles = ['Racing  レース', 'Crane  クレーン', 'Rhythm  リズム'];
-    const sign = signMesh(2.7, 0.47, { bg: color, lines: [{ text: titles[i], size: 67, color: '#2F4058' }] });
-    sign.position.set(x, 2.7, z);
+    bulbRow(x - 1.25, x + 1.25, 2.47, z + 0.2, 9);
+    const titles = [['Racing', 'レース'], ['Crane', 'クレーン'], ['Rhythm', 'リズム']];
+    const sign = signMesh(2.6, 0.62, { bg: color, lines: [{ text: titles[i][0], size: 92, color: '#21304A', y: 0.36 }, { text: titles[i][1], size: 62, color: '#21304A', y: 0.78 }] });
+    sign.position.set(x, 2.9, z + 0.2);
     root.add(sign);
   }
+  // Decorative cabinets in the middle row, two of them being played.
   for (const [i, x] of [-9, -6.3, -3.6, -0.9].entries()) {
     const z = 3.3;
-    b.box(1.35, 1.8, 0.85, ['#D995AF', '#73B8B7', '#B29AD8', '#D4B566'][i], x, 0, z, { collide: true });
-    b.box(1.0, 0.72, 0.06, '#344464', x, 0.85, z + 0.46);
+    const c = ['#E98BB6', '#5FC4C2', '#A889E6', '#E8C35C'][i];
+    b.box(1.35, 1.8, 0.85, c, x, 0, z, { collide: true });
+    b.box(1.45, 0.3, 0.95, '#2E3657', x, 1.8, z);
+    b.box(1.0, 0.72, 0.06, '#26304C', x, 0.85, z + 0.46);
     for (const dx of [-0.25, 0, 0.25]) b.box(0.12, 0.12, 0.03, ['#D9B4E9', '#9BDCD7', '#F2CB77'][i % 3], x + dx, 1.1, z + 0.5);
     b.box(1.2, 0.1, 0.4, '#485974', x, 0.7, z + 0.55);
+    bulbRow(x - 0.6, x + 0.6, 2.13, z + 0.48, 5);
+  }
+  staticStander(b, -6.3, 4.25, Math.PI, '#F08C6A', 0);
+  staticStander(b, -0.9, 4.25, Math.PI, '#6FA8DC', 2);
+  // A light-up path guides players from the escalators to the machines.
+  for (let x = -9.5; x <= 6; x += 1.1) {
+    b.cyl(0.13, 0.13, 0.012, ['#FFE27F', '#FF9AD5', '#8AF0FF'][Math.round((x + 9.5) / 1.1) % 3], x, 0.02, 1.0, { seg: 10 });
   }
   for (const x of [-6.5, -2.2, 2.1]) bench(b, x, 6.8, Math.PI, '#B19ACB');
   for (const x of [-10.5, 5.5]) planter(b, x, 6.4);
-  for (const x of [-10.7, -5.8, -0.8, 4.3]) {
-    b.box(0.08, 2.7, 0.1, '#B7D9DF', x, 0.3, -6.84);
-    b.box(2.4, 0.06, 0.06, '#F1BDDD', x + 1.2, 2.7, -6.79);
-  }
+  // Neon strips along the back wall and a bright GAME CENTER marquee.
+  for (const [k, c] of ['#FF7FC8', '#7FE8FF', '#FFE27F'].entries()) b.box(22.6, 0.07, 0.06, c, 0, 2.5 + k * 0.09, -6.83);
+  for (const x of [-11.6, 11.6]) for (const [k, c] of ['#FF7FC8', '#7FE8FF'].entries()) b.box(0.06, 2.6, 0.06, c, x + (k ? 0.1 : 0), 0.3, -6.83);
+  const marquee = signMesh(6.2, 0.9, { bg: '#2E2A5A', border: { color: '#FF7FC8', width: 14 }, lines: [{ text: '★ GAME CENTER ★', size: 120, color: '#FFE27F', y: 0.42 }, { text: 'ゲームセンター', size: 70, color: '#8AF0FF', y: 0.82 }] });
+  marquee.position.set(6.4, 2.3, -6.74);
+  root.add(marquee);
+  bulbRow(3.4, 9.4, 2.85, -6.72, 15);
+  const blink = bulbs.map((bb) => { const m = bb.build(new THREE.MeshBasicMaterial({ vertexColors: true })); root.add(m); return m; });
+  blink[1].visible = false;
+  return blink;
 }

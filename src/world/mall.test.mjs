@@ -18,6 +18,7 @@ test('mall floor selection keeps shopping on 1F and meals and meetings on 2F', (
       assert.equal(mallFloorFor(npc, { act }, day), 2);
     }
     assert.equal(mallFloorFor(npc, { act: 'games', hangout: 'pair' }, day), 2, 'a hangout pair meets together');
+    assert.equal(mallFloorFor(npc, { loc: 'mall', act: 'mall', plan: 'plan-1' }, day), 1, 'friends with a plan wait at the 1F entrance');
   }
 });
 

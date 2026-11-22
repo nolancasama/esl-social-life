@@ -8,6 +8,7 @@ import { FOODS, food as foodById } from '../data/content.js';
 import { MALL_SHOPS, pocketMoney, buyMallItem, mallFoodPrice, buyMallFood, pendingMallMeal } from '../world/mall.js';
 import { makeId } from '../core/util.js';
 import { carryMallMeal, setDownMallMeal, mallMealSnapshot, placeMallDish, consumeMallMeal, cancelMallConsumption, clearMallDishes } from './mall-meal.js';
+import { ARCADE_GAMES, runArcadeGame, standAtMachine } from './arcade.js';
 
 const extras = [
   { id: 'ramen', en: 'ramen', a: 'ramen', ja: 'ラーメン', emoji: '🍜' },
@@ -136,19 +137,110 @@ export async function orderAtMall(game, target) {
   } finally { await c.end(); game.save(); }
 }
 
+// ------------------------------------------------------------ mall outings
+// A mall outing begins wherever the group meets (planned friends wait by the
+// 1F entrance): "What do you want to do?" → shopping (1F), eating (2F) or
+// games (3F). Floor trips take no time; the whole outing is one activity,
+// so Activities.run advances one period and rewards once.
+const MALL_FLOOR_SCENES = ['mall', 'mall2', 'mall3'];
+const WANTS = {
+  shop: { floor: 1, emoji: '🛍️', en: 'I want to go shopping.', ja: '買い物に行きたい。', phrases: ['i want to go shopping', 'go shopping', 'shopping'], keys: [['shop']],
+    where: ['I want to go to the first floor.', '1かいに行きたい。', ['i want to go to the first floor', 'first floor']], go: ["Let's go to the shops!", 'お店に行こう！'] },
+  eat: { floor: 2, emoji: '🍜', en: 'I want to eat.', ja: '食べたい。', phrases: ['i want to eat', 'eat', 'lunch'], keys: [['eat', 'food']],
+    where: ['I want to go to the food court.', 'フードコートに行きたい。', ['i want to go to the food court', 'food court']], go: ["Let's go to the second floor!", '2かいに行こう！'] },
+  games: { floor: 3, emoji: '🕹️', en: 'I want to play games.', ja: 'ゲームをしたい。', phrases: ['i want to play games', 'play games', 'games'], keys: [['game', 'play']],
+    where: ['I want to go to the third floor.', '3かいに行きたい。', ['i want to go to the third floor', 'third floor']], go: ["Let's go to the third floor!", '3かいに行こう！'] },
+};
+
+/** A friend's own wish, from generated interests only. */
+export function mallWish(npc) {
+  if (npc.likes?.includes('games')) return 'games';
+  if (npc.likes?.includes('shopping')) return 'shop';
+  return 'eat';
+}
+
+function wishLine(npc) {
+  const wish = mallWish(npc);
+  if (wish === 'games') return line('I want to play games!', 'ゲームがしたいな！', { area: 'wantto' });
+  if (wish === 'shop') return line('I want to go shopping!', '買い物に行きたいな！', { area: 'wantto' });
+  const fav = foodById(npc.food);
+  return fav ? line(`I want to eat ${fav.en}!`, `${fav.ja}が食べたいな！`, { area: 'wantto' }) : line('I want to eat!', '何か食べたいな！', { area: 'wantto' });
+}
+
+function snapshot(game) { try { return game.renderer.snapshot(360, 225); } catch { return null; } }
+
 export async function playMall(game, actors) {
-  if (game.sceneId !== 'mall2') {
+  if (game.locationId !== 'mall') {
     const ids = actors.map((a) => a.npc.id);
-    if (game.locationId !== 'mall') {
-      await game.enterScene('mall', 'door');
-      actors = ids.map((id, i) => game.npcs.actorFor(id) || game.npcs.ensure(game.world.npc(id), 1 + i, -0.8, 0));
-    }
-    for (const a of actors) game.npcs.engage(a);
-    await game.changeFloor(2, 'elevator');
+    await game.enterScene('mall', 'door');
+    actors = ids.map((id, i) => game.npcs.actorFor(id) || game.npcs.ensure(game.world.npc(id), 1 + i, -0.8, 0));
   }
-  const scene = game.scene, w = game.world;
   for (const a of actors) game.npcs.engage(a);
   const c = new Conversation(game, actors);
+  const main = actors[0];
+  c.arrange();
+  c.frame();
+  await c.say(main, line('What do you want to do?', '何をしたい？', { area: 'wantto', expr: 'q.wantdo', template: 'What do you want to do?' }), { gesture: 'happy', expr: 'happy' });
+  for (const a of actors) await c.say(a, wishLine(a.npc), { expr: 'happy' });
+  const pick = await c.ask(Object.entries(WANTS).map(([id, w]) => opt(id, w.en, w.ja, { emoji: w.emoji, phrases: w.phrases, keys: w.keys, area: 'wantto', expr: 'a.wantdo', template: 'I want to ___.' })));
+  const want = WANTS[pick.id];
+  const agree = actors.find((a) => mallWish(a.npc) === pick.id);
+  await c.say(agree || main, agree ? line('Me too!', 'わたしも！') : line('OK! Good idea!', 'いいよ！いいね！'), { gesture: 'happy', expr: 'happy' });
+  await c.say(main, line('Where do you want to go?', 'どこに行きたい？', { area: 'wantto', expr: 'q.wantgo', template: 'Where do you want to go?' }));
+  await c.ask([opt('go', want.where[0], want.where[1], { emoji: want.emoji, phrases: want.where[2], keys: [['floor', 'court', 'go']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go to ___.' })]);
+  await c.say(main, line(want.go[0], want.go[1]), { gesture: 'point', expr: 'happy' });
+  game.dialogue.close();
+  if (game.sceneId !== MALL_FLOOR_SCENES[want.floor - 1]) await game.changeFloor(want.floor, 'elevator');
+  if (pick.id === 'shop') return shopOuting(game, c, actors);
+  if (pick.id === 'games') return gamesOuting(game, c, actors);
+  return mealOuting(game, c, actors);
+}
+
+async function shopOuting(game, c, actors) {
+  const main = actors[0];
+  try {
+    await c.say(main, line('What do you want to buy?', '何を買いたい？', { area: 'wantto', expr: 'q.wantbuy', template: 'What do you want to buy?' }));
+    const buys = { toys: ['I want to buy a toy.', 'おもちゃを買いたい。', 'toy'], books: ['I want to buy a book.', '本を買いたい。', 'book'], sports: ['I want to buy clothes.', '服を買いたい。', 'clothes'] };
+    const pick = await c.ask(MALL_SHOPS.map((s) => opt(s.id, buys[s.id][0], buys[s.id][1], { emoji: s.emoji, phrases: [buys[s.id][0].toLowerCase().replace('.', ''), buys[s.id][2]], keys: [[buys[s.id][2], s.id]], area: 'wantto', expr: 'a.wantbuy', template: 'I want to buy ___.' })));
+    if (pick.id === 'toys') {
+      // Possessions practice on the way in.
+      await c.say(main, line('Do you have a board game?', 'ボードゲームを持ってる？', { area: 'possessions', expr: 'q.have', template: 'Do you have ___?' }));
+      await c.ask([
+        opt('yes', 'Yes, I do.', 'うん、持ってるよ。', { emoji: '🙋', phrases: ['yes i do', 'yes'], keys: [['yes']], area: 'possessions', expr: 'a.yesido', template: 'Yes, I do.' }),
+        opt('no', "No, I don't.", 'ううん、持ってない。', { emoji: '🙅', phrases: ["no i don't", 'no'], keys: [['no']], area: 'possessions', expr: 'a.noidont', template: "No, I don't." }),
+      ]);
+    }
+    const target = game.scene.interact.find((it) => it.kind === 'mallShop' && it.shop === pick.id);
+    game.dialogue.close();
+    game.player.place(target.x, target.z + 0.8, Math.PI);
+    actors.forEach((a, i) => { a.char.setBase('idle'); a.char.setPosition(target.x + 1 + i * 0.7, target.z + 1); a.char.faceToward(target.x, target.z); });
+    await shopAtMall(game, target, { conversation: c, friends: actors });
+    await c.ask([opt('bye', 'Thank you! See you!', 'ありがとう！またね！', { emoji: '👋', phrases: PHRASES.bye, keys: [['bye', 'see']] })]);
+    const shop = MALL_SHOPS.find((s) => s.id === pick.id);
+    return { actors, score: 3, photo: snapshot(game), phrase: 'I want to go shopping.', detail: { place: 'mall', mallChoice: 'shop', shopId: pick.id, shopEn: shop.en, again: { act: 'mall' }, recall: { en: 'We went shopping at Niji Mall', ja: 'にじモールで買い物したね' } } };
+  } finally {
+    game.dialogue.close();
+  }
+}
+
+async function gamesOuting(game, c, actors) {
+  const main = actors[0];
+  try {
+    await c.say(main, line('What do you want to play?', '何であそびたい？', { area: 'wantto', expr: 'q.wantplay', template: 'What do you want to play?' }));
+    const pick = await c.ask(Object.values(ARCADE_GAMES).map((g) => opt(g.id, `I want to play ${g.en}.`, `${g.ja}をしたい。`, { emoji: g.emoji, phrases: [`i want to play ${g.en}`, g.id], keys: [[g.id]], area: 'wantto', expr: 'a.wantplay', template: 'I want to play ___.' })));
+    game.dialogue.close();
+    standAtMachine(game, pick.id, actors);
+    const r = await runArcadeGame(game, c, pick.id, { friends: actors });
+    const photo = snapshot(game);
+    await c.ask([opt('fun', 'That was fun! Thank you!', '楽しかった！ありがとう！', { emoji: '😊', phrases: ['that was fun', ...PHRASES.thanks], keys: [['fun', 'thank']] })]);
+    return { actors, score: r.score, photo, phrase: `I want to play ${ARCADE_GAMES[pick.id].en}.`, detail: { place: 'mall', mallChoice: 'games', game: pick.id, won: r.won, again: { act: 'mall' }, recall: { en: 'We played games at Niji Mall', ja: 'にじモールでゲームをしたね' } } };
+  } finally {
+    game.dialogue.close();
+  }
+}
+
+async function mealOuting(game, c, actors) {
+  const scene = game.scene, w = game.world;
   const main = actors[0];
   const visitCounter = (food) => {
     const counter = MALL_COUNTERS.find((s) => s.foods.includes(food.id)) || MALL_COUNTERS[0];
@@ -203,7 +295,7 @@ export async function playMall(game, actors) {
     const consumption = consumeMallMeal(game);
     // Reactions use the same gestures as ordinary conversation while the other
     // diners continue their own staggered bites.
-    try { photo = game.renderer.snapshot(360, 225); } catch { /* photos are optional */ }
+    photo = snapshot(game);
     for (const [i, a] of actors.slice(0, 2).entries()) {
       await c.say(a, i ? line("It's delicious!", 'おいしい！') : line('Yummy!', 'おいしいね！'), { gesture: 'happy', expr: 'happy', auto: 1300 });
     }
@@ -225,7 +317,7 @@ export async function playMall(game, actors) {
       await shopAtMall(game, target, { conversation: c, friends: actors });
       await c.ask([opt('bye', 'Thank you! See you!', 'ありがとう！またね！', { phrases: PHRASES.bye, keys: [['bye', 'see']] })]);
     }
-    return { actors, score: 3, photo, phrase: `I'd like ${mine.a}, please.`, detail: { place: 'mall', foodId: mine.id, foodEn: mine.en, orders: actors.map((a) => ({ npcId: a.npc.id, foodId: a.npc.food })), shop: next.id === 'shop', again: { act: 'mall' }, recall: { en: 'We went to Niji Mall', ja: 'にじモールに行ったね' } } };
+    return { actors, score: 3, photo, phrase: `I'd like ${mine.a}, please.`, detail: { place: 'mall', mallChoice: 'eat', foodId: mine.id, foodEn: mine.en, orders: actors.map((a) => ({ npcId: a.npc.id, foodId: a.npc.food })), shop: next.id === 'shop', again: { act: 'mall' }, recall: { en: 'We ate at Niji Mall', ja: 'にじモールでごはんを食べたね' } } };
   } finally {
     cancelMallConsumption(game);
     clearMallDishes(game);

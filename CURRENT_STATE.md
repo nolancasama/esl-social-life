@@ -1,64 +1,41 @@
 # Current State
 
-## Niji Mall Phase 2 (2026-11-22, committed)
-- Paid food on 2F now leads to a carried tray/handheld meal, highlighted free
-  table seats, four visibly diminishing bites, Skip, a delicious choice, cleared
-  dishes and a standing player in explore mode. Solo meals preserve time, XP and
-  memories. Every counter has free water and an affordable fallback path.
-- Food prices and payment reuse the existing wallet/allowance. Optional pending
-  meals and completed receipts prevent duplicate charges; reloading or leaving
-  the floor leaves the same remaining portion ready at the counter. Save v3 and
-  idempotent v1–v3 migration remain unchanged. The café stays free.
-- Group meals use the same portion helper, individual dishes and staggered bites
-  with reactions. The player pays only for their own food. Existing T2 seats,
-  one-period reward path, group focus and optional 1F shop visit are preserved.
-- Read-only semantic state: `window.__esl.mallMeal` (frozen snapshot and diner
-  records), alongside Phase 1's `mallTravel`. `scripts/mall.mjs` extends the real
-  UI coverage and writes the five requested meal frames under external
-  `SHOTS_DIR`. The deliberately wrong price check is enabled only with
-  `MALL_HARNESS_BROKEN_ASSERTION=1` for the controller's trust proof.
-- Validation (Claude, 2026-11-22): `npm test` 99/99, build, `e2e:mall` (twice),
-  `e2e:perf` (mall 16, mall2 26, mall3 16 of 90 draw calls) and `e2e` all PASS.
-  Harness trust: `MALL_HARNESS_BROKEN_ASSERTION=1` fails with exit 1 on the ramen
-  price check. Screenshots inspected (carrying tray, solo ramen mid-meal with
-  Skip, group table with each friend's own dish):
-  `%TEMP%\esl-mall-p2-review\`. Claude capped `mallMealReceipts` at 20 ids.
-- Changed files: `src/world/mall.js`, `src/world/mall.test.mjs`,
-  `src/engine/food.js`, `src/activities/mall.js`, `src/activities/mall-meal.js`,
-  `src/activities/mall-meal.test.mjs`, `src/activities/mall-order.test.mjs`,
-  `src/game/game.js`, `scripts/mall.mjs`, this file and `DESIGN_DECISIONS.md`.
-- Phases 3–4 remain unimplemented.
-
-## Niji Mall Phase 1 (2026-11-22, committed as ae0bc7b)
-- Three connected floor scenes: `mall` (1F Shopping), `mall2` (2F Food Court),
-  `mall3` (3F Game Center shell). All share location `mall`, retain floor names,
-  and have escalators, an elevator, directories and clear named arrival spawns.
-  Floor travel preserves time and engaged companion identity. Shops, purchases,
-  souvenirs, menus and existing meal outing/reward behavior are preserved.
-- NPCs occupy one derived floor per slot; shopping is on 1F, meals and explicit
-  hangout pairs on 2F, and games interests can visit 3F via an independent hash.
-  Schedules and generator RNG are unchanged. The 3F machines have no interactions;
-  exported anchors reserve racing, crane and rhythm positions for later phases.
-- Validation: `npm test` 84/84 PASS; `npm run build` PASS;
-  `npm run e2e:mall`, `npm run e2e:perf` and `npm run e2e` PASS.
-  Perf draw calls: mall 16/90, mall2 26/90, mall3 16/90 (SwiftShader proxy).
-  Read-only navigation state: `window.__esl.mallTravel` (floor, travelling, via),
-  alongside existing scene, actor, world time and music state.
-- Visual evidence: six gameplay frames in
-  `%TEMP%/esl-mall-floors-20261122/`; three settled viewer frames in
-  `%TEMP%/esl-mall-floors-viewer-20261122/` from
-  `node scripts/shots.mjs mall mall2 mall3` (PASS). The initial viewer attempt
-  timed out waiting for fonts; the dedicated-server rerun passed. Broad e2e
-  screenshots are in `%TEMP%/esl-mall-floors-e2e-20261122/`.
-  No obvious wall gaps, overlaps or z-fighting appeared. Physical storefront
-  labels/wall plaques remain small in wide views; HUD banners and walk-up prompts
-  are readable. Claude retains final aesthetic judgment; no Chromebook run yet.
-- Changed files: `src/engine/scenes/mall.js`, `src/game/game.js`,
-  `src/game/npcs.js`, `src/world/mall.js`, `src/activities/mall.js`,
-  `src/dialogue/talk.js`, `src/dev/viewer.js`, `src/core/music.js`,
-  `src/world/mall.test.mjs`, `src/world/social.test.mjs`, `scripts/mall.mjs`,
-  `scripts/perf.mjs`, this file and `DESIGN_DECISIONS.md`.
-- Phases 2–4 are not implemented. No commit or push performed.
+## Niji Mall three floors (2026-11-22, branch `niji-mall-floors`, not merged)
+Design review and all phase notes: DESIGN_DECISIONS.md → 2026-11-22. Phase 1
+`ae0bc7b` and Phase 2 `edfbd94` were built by Codex and reviewed by Claude;
+Phases 3–4 were built by Claude directly at the user's request (Codex hit a
+usage limit). Not yet merged to `main` or deployed.
+- **Floors:** scenes `mall` (1F Shopping), `mall2` (2F Food Court), `mall3` (3F
+  Game Center); all are location `mall`. Escalators, an elevator panel and a
+  directory on every floor; `game.changeFloor` never advances time and carries
+  engaged companions. NPC floor per slot from `mallFloorFor` (plans → 1F
+  entrance, shopping → 1F, meals/hangouts → 2F, some games fans → 3F).
+- **Food (2F):** fixed yen prices, paid at hand-over, free water fallback,
+  pending meal saved (`save.mallMeal`) so reloads never charge twice. Solo meals:
+  carry the tray, sit at a free seat, four shrinking bites, Skip, dishes cleared;
+  no time or XP. Group meals: own dishes, staggered bites, player pays only for
+  their own food. Café food stays free.
+- **Game Center (3F):** racing (steer ◀ ▶, navigator calls turns, STOP at the
+  finish, ghost car), crane (choose a prize, steer with cues, grab by position
+  only, six souvenir prizes each won once) and rhythm (shared `rhythm()` with
+  Perfect/Good/Miss). Canvas cabinet screens in `ui/arcadescreen.js`; rules in
+  `world/arcade.js`; play in `activities/arcade.js`. Solo play is free, no time/XP.
+- **Outings:** "What do you want to do?" → shop / eat / games, friends state
+  wishes from generated interests, "Where do you want to go?", the group travels
+  together; one period and one reward per outing; `detail.mallChoice` drives
+  recall and the journal line.
+- Test hooks: `window.__esl.mallTravel`, `.mallMeal`, `.arcade` (frozen).
+- **Verification (2026-11-22, Claude, headless Chrome + SwiftShader 1366×768):**
+  `npm test` 106/106, build, `e2e` (playthrough, scenarios, speech),
+  `e2e:mall`, `e2e:arcade` (new), `e2e:perf` (mall 16, mall2 26, mall3 18 of 90
+  draw calls), `e2e:friendship-all`, `e2e:friendhouse`, `e2e:school`,
+  `e2e:music` all PASS. `e2e:scenarios` failed once on the lost-item/directions
+  section and passed on rerun (not mall code). Harness trust: Phase 2's
+  `MALL_HARNESS_BROKEN_ASSERTION=1` fails with exit 1; `ARCADE_HARNESS_BROKEN_ASSERTION=1`
+  is the arcade equivalent. Screenshots inspected by Claude:
+  `%TEMP%\esl-mall-p4-review\` (1F, 3F), `%TEMP%\esl-arcade-review2\`
+  (crane, racing, rhythm, outing with a friend), `%TEMP%\esl-mall-p2-review\`
+  (solo and group meals).
 
 ## Status (2026-11-19)
 School-life expansion built on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, as `3af830f` (see DESIGN_DECISIONS.md 2026-11-19); Part 4, procedural music, as `2d8c0e7`. All four parts were merged to `main` (fast-forward) and deployed to GitHub Pages on 2026-11-19 (gh-pages `0fc4ee7`).
@@ -197,6 +174,9 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - School rooms (perf: 118-119 of 150 draw calls each): classmates stand in loose spots around the room during the lesson; in the gym the teacher stands behind the catch partner. Fine for now; polish if playtests show it matters.
 
 ## Next Steps
+0. Niji Mall three floors: user review, then merge `niji-mall-floors` to `main`
+   and deploy. On a Chromebook check the arcade touch buttons (hold to steer),
+   crane difficulty (3 tries, grip radius 0.065) and race length (~21 s).
 1. Play on a classroom Chromebook: frame rate with groups and visits, touch on the composer cards, read-aloud quality.
 2. Playtest pacing: how many days to Lv3, Lv4 and Lv5 with one-on-one memories; whether 2 event offers a day feels right; whether soft approaches feel welcome rather than intrusive.
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
@@ -208,6 +188,11 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
    checking out `main` here.
 
 ## Codex / Delegated Work
+Niji Mall floors: Phase 1–2 Codex output reviewed and committed (Phase 2's run
+ended on a Codex usage limit; Claude reviewed the partial diff, ran acceptance
+and capped meal receipts). Phases 3–4 are Claude's own work. No pending worker
+output.
+
 Part 4 (music) was built by Codex and reviewed by Claude: diff read, scene ids checked against theme names, screenshots inspected, full suite rerun by Claude. Claude then made the fixed-weekly-rhythm timetable change directly (content.js, school.js, school tests, e2e:school/e2e:music day fixtures). No pending worker output.
 
 Part 3 was built by Codex (stopped on a usage limit before validation) and finished by Claude at the user's request: casual-question priority fix, two e2e fixture fixes, harness proof (known-good pass; a deliberately broken intro line failed with exit 1, reverted), full suite rerun. No pending worker output.

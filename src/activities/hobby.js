@@ -21,6 +21,7 @@ import { wait, el } from '../core/util.js';
 import { interest, numberWord } from '../data/content.js';
 import { styleLine, styleGesture } from '../world/personality.js';
 import { until, makeBall } from './ballplay.js';
+import { rhythmGrade } from '../world/arcade.js';
 
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const shuffle = (a) => a.slice().sort(() => Math.random() - 0.5);
@@ -368,7 +369,11 @@ const MUSIC = {
   dancing: { verb: 'dance', ing: 'dancing', past: 'danced', ja: 'ダンス', jaPast: 'おどった', title: '💃 Dance Time', gesture: 'dance' },
 };
 
-async function rhythm(game, a, { beats = 8, title, gesture }) {
+/**
+ * The shared timing meter. `a` (a partner) is optional. With `grades` (an
+ * array) each beat is also graded Perfect / Good / Miss for the arcade game.
+ */
+export async function rhythm(game, a, { beats = 8, title, gesture, grades = null, period = 1.25 }) {
   const hud = game.activityHud;
   hud.show(title);
   const results = [];
@@ -378,7 +383,7 @@ async function rhythm(game, a, { beats = 8, title, gesture }) {
   const melody = [0, 2, 4, 2, 0, 4, 5, 7];
   for (let i = 0; i < beats; i++) {
     let t = 0, pressed = null;
-    const T = 1.25;
+    const T = period;
     hud.button('🎵 TAP!', () => { if (pressed === null) pressed = Math.min(1, t / T); }, 'throw');
     await until(game, (dt) => {
       t += dt;
@@ -388,8 +393,10 @@ async function rhythm(game, a, { beats = 8, title, gesture }) {
     const hit = pressed !== null && pressed > 0.34 && pressed < 0.66;
     results.push(hit);
     hud.setScore(results, beats);
-    if (hit) { sfx.note(melody[i % melody.length]); hud.pop(['Nice!', 'Great!', 'Yes!'][i % 3], 'good'); game.player.char.play(gesture === 'dance' ? 'dance' : 'happy', 0.6); a.char.play(gesture, 0.7); }
-    else hud.pop('Next one!', 'wait');
+    const grade = grades ? rhythmGrade(pressed) : null;
+    if (grades) grades.push(grade);
+    if (hit) { sfx.note(melody[i % melody.length]); hud.pop(grades ? (grade === 'perfect' ? 'Perfect!' : 'Good!') : ['Nice!', 'Great!', 'Yes!'][i % 3], 'good'); game.player.char.play(gesture === 'dance' ? 'dance' : 'happy', 0.6); a?.char.play(gesture, 0.7); }
+    else hud.pop(grades ? 'Miss' : 'Next one!', 'wait');
     await wait(220);
   }
   hud.button(null);

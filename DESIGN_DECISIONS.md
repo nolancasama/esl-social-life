@@ -181,7 +181,47 @@ floor changes. `e2e:mall` is extended per phase; perf covers all three floors.
   paths. `MALL_HARNESS_BROKEN_ASSERTION=1` selects a deliberately wrong ramen
   price for the controller's pass/fail trust proof. Acceptance runs, perf, visual
   evidence and that trust proof remain controller-owned for this delivery.
-- Arcade play and outing activity selection remain Phases 3 and 4.
+
+**Phases 3–4 implementation (2026-11-22, Claude directly at the user's request)**
+- **Minigames are canvas cabinet screens, not 3D.** A DOM overlay
+  (`ui/arcadescreen.js`) shows one 640×400 canvas with large hold buttons
+  (◀ ▲ ▼ ▶) and action buttons; arrow keys/WASD and Space also work. **Why:**
+  Readable at 1366×768, touch-friendly, cheap on Chromebooks (no extra draw
+  calls), and the 3D cabinets stay simple merged geometry. **Rejected:** a 3D
+  claw or 3D track in the scene.
+- Rules live in pure `world/arcade.js` with unit tests. Crane: a fixed grip
+  radius decides a grab; prizes are spaced so one grip reaches at most one. The
+  helper calls "Go left / Go right / Go back / Come forward / Stop! It's under the
+  claw." toward the prize the player chose ("I want the cat."). Three tries per
+  play. The award and save happen before any result line, keyed to the souvenir
+  kind. Racing: a short scrolling road with arrow signs, a navigator calling the
+  next turn 15–20 m early, a STOP button (a short brake on the road, a stop at
+  the finish line) and a fixed, per-friend ghost time. Rhythm reuses `hobby.js`
+  `rhythm()` (now exported, with optional Perfect/Good/Miss grading and no
+  required partner); a friend's score is a fixed hash. "Go back / Come forward"
+  were added for the crane's depth axis.
+- Solo machines: walk up, play, then "One more time!" or "That was fun!". No
+  time, XP or memories. Arcade state for tests: `window.__esl.arcade`.
+- **Outings (Phase 4):** planned friends now wait by the 1F entrance
+  (`mallFloorFor` returns 1 for plan slots; previously the 2F table). The opening
+  is "What do you want to do?" → each friend's wish from generated interests
+  (games → "I want to play games!", shopping → "I want to go shopping!", else
+  their food like) → the player's choice → "Where do you want to go?" → "I want
+  to go to the first floor / food court / third floor." → the group travels
+  together. Eat keeps the Phase 2 meal and its optional shop visit. Shop picks
+  "I want to buy a toy / a book / clothes." (toys adds "Do you have a board
+  game?"), then the existing shop flow. Games picks "I want to play ___." and
+  plays one machine together. The outing stays `act: 'mall'` with
+  `detail.mallChoice`; memory recall and the journal match the choice. One
+  period and one reward through `Activities.run`, however many floors.
+- Directory now offers "I want to go to the third floor." and sets a 3F goal.
+- Visual pass: 1F storefronts differ (scalloped toy awning, wooden bookshop frame,
+  sports turf mat, themed window displays), shop signs are two-line EN/JA at
+  counter-sign size, capsule-toy machines and three window-shopper figures fill
+  the corridor. 3F has a brighter palette, a GAME CENTER marquee, neon wall
+  strips, a light-up floor path, blinking marquee bulbs (two meshes swapping
+  visibility) and two static players at the decorative cabinets. The crane's
+  opaque front pane was replaced by an open frame so the prizes show.
 
 ## 2026-11-19 — School day: music room, gym and art room
 

@@ -486,3 +486,18 @@ kbd { font-family: var(--font); font-weight: 900; font-size: 12px; background: r
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* Game Center cabinet screen (activities/arcade.js) */
+.arc { position: absolute; left: 50%; top: 200px; transform: translateX(-50%); z-index: 34; display: flex; flex-direction: column; align-items: center; gap: 10px; animation: pop 0.25s ease-out; }
+.arc-screen { padding: 10px; border-radius: 22px; background: var(--arc); box-shadow: 0 8px 0 rgba(0,0,0,0.25), 0 14px 30px rgba(0,0,0,0.3); }
+.arc-canvas { display: block; width: min(560px, 92vw, calc((100vh - 330px) * 1.6)); height: auto; border-radius: 14px; background: #1E2340; }
+.arc-controls { display: flex; gap: 28px; align-items: center; justify-content: center; }
+.arc-pad, .arc-acts { display: flex; gap: 10px; }
+.arc-dir, .arc-act { pointer-events: auto; border: 0; touch-action: none; user-select: none; font-weight: 900; color: #fff; cursor: pointer; }
+.arc-dir { width: 74px; height: 74px; border-radius: 20px; font-size: 30px; background: #4C5A86; box-shadow: 0 6px 0 #2F3A5E; }
+.arc-dir.on { transform: translateY(4px); box-shadow: 0 2px 0 #2F3A5E; background: #6273A8; }
+.arc-act { min-width: 150px; height: 74px; border-radius: 37px; font-size: 24px; background: var(--primary); box-shadow: 0 6px 0 var(--primary-dark); }
+.arc-act.stop { background: #E25C5C; box-shadow: 0 6px 0 #A83A3A; }
+.arc-act.go { background: var(--teal); box-shadow: 0 6px 0 #138C82; }
+.arc-act:active { transform: translateY(4px); }
+.arc-act[disabled] { opacity: 0.45; }

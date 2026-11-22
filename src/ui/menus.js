@@ -57,7 +57,10 @@ function memoryCaption(m) {
   if (d.label?.en) return `${d.label.emoji || '⭐'} ${d.label.en.replace(/!$/, '')}`;
   if (m.type === 'event' && d.recall?.en) return `⭐ ${d.recall.en}`;
   if (m.act === 'cafe') return `☕ Café Komorebi${d.foodEn ? ` (${d.foodEn})` : ''}`;
-  if (m.act === 'mall') return `🛍️ Niji Mall${d.foodEn ? ` (${d.foodEn})` : ''}`;
+  if (m.act === 'mall') {
+    const what = d.mallChoice === 'games' ? `${d.game || 'arcade'} game` : d.mallChoice === 'shop' ? d.shopEn : d.foodEn;
+    return `${d.mallChoice === 'games' ? '🕹️' : '🛍️'} Niji Mall${what ? ` (${what})` : ''}`;
+  }
   if (m.act === 'soccer') return '⚽ Soccer at Sakura Park';
   if (m.act === 'catch') return '⚾ Playing catch at the park';
   return `${ACT_INFO[m.act]?.emoji || '⭐'} ${ACT_INFO[m.act]?.en || 'Time together'}`;

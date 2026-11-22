@@ -2,6 +2,9 @@ import { hashString } from '../core/rng.js';
 
 /** Derive one floor without consuming the schedule generator's RNG or editing saves. */
 export function mallFloorFor(npc, slot, day) {
+  // Friends with a plan wait at the 1F entrance, where the outing begins with
+  // "What do you want to do?" (DESIGN_DECISIONS 2026-11-22, Phase 4).
+  if (slot.plan) return 1;
   if (slot.act === 'shopping') return 1;
   // Authored meals and meetings stay together, including an explicit hangout pair.
   if (slot.hangout || ['mall', 'cafe', 'sweets', 'eat', 'eating', 'meet', 'meeting', 'food', 'lunch', 'dinner'].includes(slot.act)) return 2;

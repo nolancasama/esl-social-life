@@ -159,7 +159,11 @@ export class NpcManager {
         } else if (sceneId === 'town' && plan.loc === 'park') {
           const f = scene.field;
           this._spawn(e, f.b.x + k * 1.2 - (n - 1) * 0.6, f.b.z, 0, 'stand', { gesture: 'cheer', plan: true, prop: k === 0 && plan.act === 'soccer' ? 'ball' : k === 0 && plan.act === 'catch' ? 'baseball' : null });
-        } else if (sceneId === 'cafe' || sceneId === 'mall2') {
+        } else if (sceneId === 'mall') {
+          // Mall outings start by the 1F entrance, facing the door.
+          const p = scene.collision.nearestFree(8.9 - k * 0.85, 4.25, 0.35);
+          this._spawn(e, p.x, p.z, Math.PI / 2, 'stand', { plan: true });
+        } else if (sceneId === 'cafe') {
           const seat = scene.seats.find((s) => s.id === `T2-${[1, 3, 2][k] ?? 1}`) || scene.seats.find((s) => s.id === 'T2-1');
           this._spawn(e, seat.x, seat.z, seat.yaw, 'sit', { seatY: seat.seatY, plan: true });
         } else if (sceneId === 'home') {

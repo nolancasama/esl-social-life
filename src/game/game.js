@@ -16,6 +16,7 @@ import { buildMusicRoom, buildGym, buildArtRoom } from '../engine/scenes/schoolr
 import { lessonForDay } from '../world/school.js';
 import { runSchoolLesson } from '../activities/school.js';
 import { mallMealSnapshot, mallSeatInteractions, updateMallMeal, eatSoloMallMeal } from '../activities/mall-meal.js';
+import { arcadeSnapshot } from '../activities/arcade.js';
 import { souvenirMesh } from '../engine/food.js';
 import { DialogueUI } from '../dialogue/ui.js';
 import { talkToNpc } from '../dialogue/talk.js';
@@ -131,6 +132,7 @@ export class Game {
   get friendship() { return snapshot(this.world); }
   get music() { return musicSnapshot(); }
   get mallMeal() { return mallMealSnapshot(this); }
+  get arcade() { return arcadeSnapshot(); }
 
   portrait(npc) { return this.portraitFn(npc.look, npc.id + ':' + (npc.lookSeed || 0)); }
   playerPortrait() { return this.portraitFn(this.world.save.player.look, 'player:' + JSON.stringify(this.world.save.player.look).length + this.world.save.player.look.hairStyle + this.world.save.player.look.topColor); }
@@ -547,6 +549,7 @@ export class Game {
       case 'mallShop': return this.activities.mallShop(it);
       case 'mallFood': return this.activities.mallCounter(it);
       case 'mallSeat': return eatSoloMallMeal(this, it.seatId);
+      case 'arcade': return this.activities.arcade(it);
       case 'mallEscalator': return this.changeFloor(it.floor, it.via);
       case 'mallElevator': {
         const floor = MALL_FLOORS.indexOf(this.sceneId) + 1;
@@ -557,13 +560,18 @@ export class Game {
         return;
       }
       case 'mallDirectory': {
-        const choice = await this.askSolo({ name: '🛍️ Niji Mall', color: '#2F9E9E', en: '1F Shopping: Toys & Games, Books & Stationery, Sports & Clothes.\n2F Food Court: Rainbow Ramen, Sunny Burgers, Little Sushi, Cloud Crepes & Ice Cream.\n3F Game Center: arcade machines and a waiting area.', ja: '1かい：おもちゃ・本・スポーツ\n2かい：フードコート\n3かい：ゲームセンター' }, [opt('shops', "Let's look at the shops!", '1かいのお店を見よう！', { keys: [['shop']] }), opt('food', "Let's go to the food court!", '2かいのフードコートに行こう！', { keys: [['food']] }), opt('thanks', 'Thank you!', 'ありがとう！')]);
+        const choice = await this.askSolo({ name: '🛍️ Niji Mall', color: '#2F9E9E', en: '1F Shopping: Toys & Games, Books & Stationery, Sports & Clothes.\n2F Food Court: Rainbow Ramen, Sunny Burgers, Little Sushi, Cloud Crepes & Ice Cream.\n3F Game Center: racing, crane and rhythm games. Where do you want to go?', ja: '1かい：おもちゃ・本・スポーツ\n2かい：フードコート\n3かい：ゲームセンター\nどこに行きたい？' }, [
+          opt('shops', 'I want to go shopping.', '買い物に行きたい。', { emoji: '🛍️', phrases: ['i want to go shopping', 'shopping', 'shops'], keys: [['shop']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go ___.' }),
+          opt('food', 'I want to go to the food court.', 'フードコートに行きたい。', { emoji: '🍜', phrases: ['i want to go to the food court', 'food court', 'food'], keys: [['food', 'eat']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go to ___.' }),
+          opt('games', 'I want to go to the third floor.', '3かいに行きたい。', { emoji: '🕹️', phrases: ['i want to go to the third floor', 'third floor', 'games', 'game center'], keys: [['third', 'game']], area: 'wantto', expr: 'a.wantgo', template: 'I want to go to ___.' }),
+          opt('thanks', 'Thank you!', 'ありがとう！'),
+        ]);
         if (choice === 'thanks') return;
-        const floor = choice === 'shops' ? 1 : 2;
+        const floor = { shops: 1, food: 2, games: 3 }[choice];
         const destination = this.getScene(MALL_FLOORS[floor - 1]);
         const local = destination === this.scene;
-        const target = local ? destination.interact.find((t) => choice === 'shops' ? t.shop === 'toys' : t.counter === 'ramen') : this.scene.interact.find((t) => t.kind === 'mallElevator');
-        this.hud.setGoal({ icon: choice === 'shops' ? '🛍️' : '🍜', en: local ? `Go to ${target.label.en}` : `Take the elevator to ${floor}F`, ja: local ? `${target.label.ja}へ行こう` : `${floor}かいへ行こう`, loc: 'mall', target: { x: target.x, z: target.z, label: target.label.en }, temp: true, local: true });
+        const target = local ? destination.interact.find((t) => choice === 'shops' ? t.shop === 'toys' : choice === 'food' ? t.counter === 'ramen' : t.game === 'racing') : this.scene.interact.find((t) => t.kind === 'mallElevator');
+        this.hud.setGoal({ icon: { shops: '🛍️', food: '🍜', games: '🕹️' }[choice], en: local ? `Go to ${target.label.en}` : `Take the elevator to ${floor}F`, ja: local ? `${target.label.ja}へ行こう` : `${floor}かいへ行こう`, loc: 'mall', target: { x: target.x, z: target.z, label: target.label.en }, temp: true, local: true });
         return;
       }
       case 'board': return this.menus.open('board');

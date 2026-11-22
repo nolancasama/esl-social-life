@@ -118,6 +118,15 @@ const finishSolo = async ({ skip = false } = {}) => {
 };
 
 try {
+  // Lines type out; record each finished line in the page. An init script
+  // survives the reload this harness does for the pending-meal check.
+  await page.addInitScript(() => {
+    window.__said = [];
+    addEventListener('DOMContentLoaded', () => new MutationObserver(() => {
+      const t = document.querySelector('.dlg-en')?.textContent;
+      if (t && window.__said[window.__said.length - 1] !== t) window.__said.push(t);
+    }).observe(document.body, { subtree: true, childList: true, characterData: true }));
+  });
   await page.goto(base + '/?autostart=sample&name=Mika');
   await page.waitForFunction(() => window.__esl?.sceneId === 'classroom', null, { timeout: 30000 });
   await sleep(2600);
@@ -196,7 +205,7 @@ try {
   await onFloor('mall3');
   await floorChecks(3);
   await shot('mall3-arcade-shell');
-  expect(await ev(() => window.__esl.scene.interact.every((it) => ['mallEscalator', 'mallElevator', 'mallDirectory'].includes(it.kind))), 'arcade shell has no machine interactions');
+  expect(await ev(() => ['racing', 'crane', 'rhythm'].every((id) => window.__esl.scene.interact.some((it) => it.kind === 'arcade' && it.game === id))), '3F has racing, crane and rhythm machines');
   await use('directory');
   expect(await pump(idle, { label: '3F-directory', max: 30, prefer: ['Thank you!'] }), '3F directory ends in a choice');
   await use('elevator');
@@ -286,12 +295,12 @@ try {
   const plan = await ev(() => window.__esl.world.save.plans.find((p) => p.status === 'pending' && p.loc === 'mall') || null);
   expect(plan?.npcIds.length === 2 && plan.act === 'mall' && plan.day === 6 && plan.period === 0, 'phone made a mall plan with two friends');
   if (!plan) throw new Error('HARNESS_PRECONDITION_FAILED: No mall plan to play');
-  await ev(async (plan) => { const g = window.__esl; g.world.save.time = { day: plan.day, period: plan.period }; g.world.ensureDaily(); g.hud.queue.length = 0; await g.enterScene('mall2', 'elevator'); }, plan);
+  await ev(async (plan) => { const g = window.__esl; g.world.save.time = { day: plan.day, period: plan.period }; g.world.ensureDaily(); g.hud.queue.length = 0; await g.enterScene('mall', 'door'); }, plan);
   await settle();
   const before = await ev((ids) => { const w = window.__esl.world; return ids.map((id) => ({ id, xp: w.rel(id).xp, level: w.level(id), memories: w.rel(id).memories.length })); }, plan.npcIds);
   const groupBalanceBefore = await ev(() => window.__esl.world.save.pocketMoney.balance);
   // Walk to a waiting friend, then use the same Talk action as the keyboard.
-  await precondition('planned friend is waiting in the food court', (id) => !!window.__esl.npcs.actorFor(id), plan.npcIds[0]);
+  await precondition('planned friends wait by the 1F entrance', (ids) => window.__esl.sceneId === 'mall' && ids.every((id) => { const a = window.__esl.npcs.actorFor(id); return a && a.char.root.position.x > 6; }), plan.npcIds);
   await ev((id) => { const g = window.__esl, a = g.npcs.actorFor(id), p = a.char.root.position; const free = g.scene.collision.nearestFree(p.x + 0.8, p.z + 0.6, 0.3); g.player.place(free.x, free.z, 0); }, plan.npcIds[0]);
   await precondition('waiting friend offers the Talk action', (id) => window.__esl.target?.actor?.npc?.id === id || window.__esl.target?.a?.npc?.id === id, plan.npcIds[0]);
   await page.locator('.action').click();
@@ -307,7 +316,7 @@ try {
       if (!tableShot) { await shot('mall-group-mid-eating'); tableShot = true; }
     }
     return await ev(() => window.__esl.world.period === 1 && window.__esl.mode === 'explore' && !window.__esl.hud.showingCard);
-  }, { label: 'group', max: 250, prefer: ["Let's go!", 'I want sushi.', "I'd like", "Let's look at one shop!", "Let's go to Books and Stationery!", 'No, thank you.', 'What do you want to eat?', 'Thank you!', "It's delicious!", 'Thank you! See you!'] }), 'mall group outing completed in one period');
+  }, { label: 'group', max: 250, prefer: ['I want to eat.', 'I want to go to the food court.', "Let's go!", 'I want sushi.', "I'd like", "Let's look at one shop!", "Let's go to Books and Stationery!", 'No, thank you.', 'What do you want to eat?', 'Thank you!', "It's delicious!", 'Thank you! See you!'] }), 'mall group outing completed in one period');
   await settle();
   const after = await ev((ids) => {
     const w = window.__esl.world;
@@ -315,6 +324,7 @@ try {
     return { memory, friends: ids.map((id) => ({ id, xp: w.rel(id).xp, level: w.level(id), memories: w.rel(id).memories.length })) };
   }, plan.npcIds);
   expect(after.memory?.npcIds.length === 2 && after.memory.focus?.length === 0, 'group memory contains both friends and focus []');
+  expect(after.memory?.detail.mallChoice === 'eat' && await ev(() => ['What do you want to do?', 'Where do you want to go?'].every((s) => window.__said.some((t) => t.includes(s)))), 'outing starts with What do you want to do? and the eat choice');
   expect(after.memory?.detail.shop === true && await ev((before) => window.__esl.world.save.pocketMoney.balance === before - 500, groupBalanceBefore), 'player pays only 500 yen for their sushi; friends and declined shop add no charge');
   expect(after.friends.every((n, i) => n.xp - before[i].xp === 10 + (n.id === plan.npcIds[0] ? 1 : 0) && n.level === before[i].level && n.memories === before[i].memories), 'each friend receives existing 6 event XP + 4 first-time bonus; the greeted friend also gets existing 1 chat XP, with no level gate');
   expect(cast.every((n) => after.memory?.detail.orders.some((o) => o.npcId === n.id && o.foodId === n.food)), 'each friend orders their known favorite food');

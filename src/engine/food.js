@@ -158,6 +158,20 @@ export function souvenirMesh(kind) {
     case 'mall_pencils': b.box(0.17, 0.12, 0.05, '#FFF1D5', 0, 0, 0); for (const [i, c] of ['#E98B97', '#E7C45E', '#79BBA7', '#86ACD1'].entries()) b.cyl(0.012, 0.012, 0.18, c, -0.06 + i * 0.04, 0.035, 0, { seg: 6 }); break;
     case 'mall_shirt': b.box(0.17, 0.17, 0.05, '#81B9CD', 0, 0, 0); b.box(0.29, 0.07, 0.05, '#81B9CD', 0, 0.11, 0); break;
     case 'mall': b.box(0.17, 0.18, 0.1, '#F4CE78', 0, 0, 0); b.add(G.torus(0.045, 0.012, 4, 10), '#78AEA8', { y: 0.2 }); break;
+    // Game Center crane prizes: small plush toys (world/arcade.js CRANE_PRIZES).
+    case 'crane_bear': case 'crane_cat': case 'crane_rabbit': {
+      const c = { crane_bear: '#C9925E', crane_cat: '#F2C26B', crane_rabbit: '#F4D9E3' }[kind];
+      b.sphere(0.085, c, 0, 0.085, 0, { sy: 1.05 });
+      b.sphere(0.07, c, 0, 0.22, 0);
+      if (kind === 'crane_rabbit') for (const dx of [-0.03, 0.03]) b.box(0.025, 0.1, 0.02, c, dx, 0.27, 0);
+      else if (kind === 'crane_cat') for (const dx of [-0.04, 0.04]) b.cone(0.025, 0.05, c, dx, 0.27, 0, { seg: 4 });
+      else for (const dx of [-0.05, 0.05]) b.sphere(0.028, c, dx, 0.28, 0);
+      for (const dx of [-0.022, 0.022]) b.sphere(0.011, '#2E3440', dx, 0.23, 0.062);
+      break;
+    }
+    case 'crane_duck': b.sphere(0.09, '#F7D84B', 0, 0.08, 0, { sx: 1.2 }); b.sphere(0.06, '#F7D84B', 0.05, 0.19, 0); b.box(0.05, 0.02, 0.03, '#F08C3A', 0.11, 0.18, 0); break;
+    case 'crane_dino': b.sphere(0.09, '#86C28B', 0, 0.08, 0, { sx: 1.4 }); b.sphere(0.045, '#86C28B', 0.1, 0.2, 0); b.cyl(0.025, 0.03, 0.12, '#86C28B', 0.08, 0.08, 0, { seg: 6 }); b.cone(0.04, 0.12, '#86C28B', -0.15, 0.07, 0, { rz: Math.PI / 2, seg: 6 }); break;
+    case 'crane_star': for (let k = 0; k < 5; k++) b.cone(0.045, 0.11, '#F6B94A', Math.sin(k * 1.2566) * 0.06, 0.13 + Math.cos(k * 1.2566) * 0.06, 0, { rz: -k * 1.2566, seg: 4 }); b.sphere(0.065, '#F6B94A', 0, 0.13, 0, { sz: 0.6 }); break;
     case 'postcard': b.box(0.3, 0.2, 0.025, '#FFF6E6', 0, 0, 0); b.box(0.08, 0.07, 0.005, '#FF8FA3', 0.085, 0.11, 0.016); b.box(0.14, 0.045, 0.005, '#80C7AB', -0.035, 0.045, 0.016); break;
     case 'soccer': b.sphere(0.12, '#FFFFFF', 0, 0.12, 0); b.sphere(0.05, '#2E3440', 0, 0.2, 0.07); break;
     case 'catch': b.sphere(0.07, '#FFFFFF', 0, 0.07, 0); b.sphere(0.1, '#B5651D', 0.12, 0.08, 0, { sx: 1.2, sz: 0.5 }); break;
