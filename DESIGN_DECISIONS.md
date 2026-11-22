@@ -27,6 +27,113 @@ A useful rule:
 
 ---
 
+## 2026-11-22 — Niji Mall three floors: review of the expansion brief
+
+The user's brief (three floors, solo eating, food prices, arcade, flexible
+outings) was accepted as the direction. Claude's review froze these decisions
+before implementation. It supersedes parts of 2026-11-17 where noted.
+
+**Floors and scenes (accepted, made concrete)**
+- Three separate scenes: `mall` = 1F Shopping (keeps its id so the town door,
+  saves, music theme, perf entry and existing e2e keep working), `mall2` = 2F
+  Food Court, `mall3` = 3F Game Center. `game.locationId` returns `'mall'` for
+  all three, so schedules, `LOCATIONS`, hangouts and plans need no new place.
+  **Rejected:** vertical physics or one tall scene; a camera that could show
+  other floors.
+- Each floor has an up and/or down escalator and an elevator at matching
+  positions, named spawns (`door` on 1F only, `escUp`, `escDown`, `elevator`)
+  so the player emerges next to the device used. One `game.changeFloor(floor,
+  via)` path handles every trip: short fade (well under a second) with an
+  ⬆/⬇ cue and a large "2F Food Court / 2かい フードコート" banner. Floor travel
+  never advances time. The elevator shows a 1F/2F/3F card panel. Every floor
+  has a directory card listing all three floors; 1F keeps the entrance.
+- **2026-11-17 superseded:** shops move to 1F and the four counters to 2F; the
+  arcade is new on 3F. The "large multi-floor centre" rejection is reversed
+  because the user asked for it; the budget stays: every floor ≤ 90 draw calls
+  in `e2e:perf`, decor in merged static geometry, background customers as
+  merged figures, at most a few animated ambient characters per floor.
+
+**NPC floors**
+- A pure `mallFloorFor(npc, slot, day)` in `world/mall.js` decides the floor:
+  `shopping` → 1F; eating / meeting (`act: 'mall'`) → 2F; 3F for NPCs whose
+  generated interests include games, chosen deterministically from an
+  independent hash (never the schedule RNG stream). An NPC is on exactly one
+  floor per slot. Companions (engaged actors) move with the player on every
+  floor change. No autonomous cross-floor pathfinding.
+
+**Food prices (accepted; reverses the 2026-11-17 "food is free" rule for the mall only)**
+- The café stays free. Mall food has fixed round prices shown on every card
+  (¥150–¥500, e.g. ramen ¥500, hamburger ¥400, sushi ¥500, rice ball ¥150, ice
+  cream ¥200). Money is taken only when the food is handed over. A paid order is
+  saved as `save.mallMeal` (`{ id, foodId, bites }`) until it is eaten, so an
+  interrupted or reloaded meal is waiting at the counter ("Your food is ready!")
+  and is never charged twice. The field is optional; v3 saves load unchanged.
+- Not enough money is never a dead end: the shopkeeper says so kindly, and a
+  free "Just water, please." / "おみずをください。" option always exists, so the
+  player can still sit and eat with friends.
+- Group rule: everyone pays for their own food. Ordering for a friend ("It's
+  for ___!") is still allowed; the friend pays. The player is never charged for
+  friends. **Rejected:** paying for the whole table, borrowing, or XP for paying.
+
+**Solo eating (accepted, the most important fix)**
+- After a paid order the player carries a tray/handheld food, walks to any
+  free seat (free seats are highlighted), sits, the dish is set on the table and
+  is eaten in 3–4 bites, visibly shrinking (ramen level drops, burger shrinks,
+  sushi pieces disappear, crêpe/ice cream shrinks), then "It's delicious!", the
+  dishes are cleared and the player stands up. A Skip button finishes at once.
+  No time passes and no friendship XP is given.
+- Group meals use the same consumption helper: each person's own dish, eaten
+  in a staggered sequence with occasional reactions, a camera that frames the
+  whole table, and dishes cleared at the end.
+
+**Arcade (accepted with changes)**
+- Arcade play is free (no yen). **Why:** It does not use up the allowance that
+  food and shops need, and a paid crane game feels like gambling for children.
+- Crane game: the player moves the claw with ◀ ▶ (and ▲ ▼ for depth), and drops
+  it. A win depends only on how well the claw lines up with the prize (a fixed
+  tolerance), never on random chance. Cues: "Go left." "Go right." "Stop!" "It's
+  under the claw." Six small prizes. Each prize is a souvenir that can be won
+  once (bedroom shelf). Winning a prize you already have says "You have it
+  already! Try another one." and gives nothing. Rewards are keyed to the prize,
+  so retries and interruptions cannot duplicate them.
+- Racing: a new lightweight top-down track (canvas or flat 3D), with left/right
+  steering and a stop/finish line. Instruction signs and a navigator call "Go
+  straight!", "Turn left!", "Turn right!", "Stop!". Solo, or against a friend's
+  ghost car with a fixed lap time. Steering is by keys and touch, not by
+  speech (speech is too slow for steering). The existing friend-house BOOST
+  racing is kept as it is.
+- Rhythm: reuse `hobby.js`'s `rhythm()` (exported, with an arcade option:
+  Perfect/Good/Miss feedback and a short song); no new music system. Playable
+  muted and quiet by default.
+- Solo arcade play takes no time and gives no XP. During a committed mall outing
+  the activity counts as the outing (one period, XP once through the existing
+  reward path). **Rejected:** XP for each arcade round.
+
+**Flexible outings (accepted)**
+- Arriving at the mall on an outing, a friend asks "What do you want to do?";
+  friends may say what they would like, based on generated interests and food
+  likes; the player chooses "I want to go shopping." / "I want to eat." /
+  "I want to play games.". The group goes to that floor together. The outing
+  stays `act: 'mall'` (plans, recall, repeat plans unchanged), with
+  `detail.mallChoice: 'shop' | 'eat' | 'games'` and recall lines that match
+  ("We played games at Niji Mall"). Completion advances exactly one period and
+  goes through the existing `completeEvent` / personal-memory paths once,
+  however many floors are visited.
+
+**English**
+- New lines use the existing card + optional speech pattern with Japanese hints,
+  and every conversation ends in a choice: want to + verb (Where/What do you
+  want to go/do/eat/buy/play?; I want to go to the third floor.), ordering (A
+  hamburger, please. I'd like ramen, please. Here you are. Thank you.), How
+  much is it?, directions in racing/crane, prepositions in directory and crane
+  lines ("It's by the door." "It's under the claw."), "Let's play together!",
+  "It's delicious!". No quizzes, nothing blocked by microphone errors.
+
+**Delivery:** four phases on branch `niji-mall-floors`, each tested before the
+next: (1) floors, navigation, signage, NPC floors; (2) solo/group eating and
+food prices; (3) arcade floor and minigames; (4) flexible outings and companion
+floor changes. `e2e:mall` is extended per phase; perf covers all three floors.
+
 ## 2026-11-19 — School day: music room, gym and art room
 
 - **What:** Three new school rooms (music room, gym, art room; one shared
