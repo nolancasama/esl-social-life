@@ -63,7 +63,7 @@ export async function talkToNpc(game, actor) {
   const w = game.world;
   const npc = actor.npc;
   if (actor.special === 'teacher') return talkToTeacher(game, actor);
-  if (actor.special === 'staff') return game.sceneId === 'mall' ? game.activities.mallCounter(game.scene.interact.find((it) => it.counter === 'sweets')) : game.activities.cafeCounter(actor);
+  if (actor.special === 'staff') return game.sceneId === 'mall2' ? game.activities.mallCounter(game.scene.interact.find((it) => it.counter === 'sweets')) : game.activities.cafeCounter(actor);
   if (w.save.flags.fd === 'start' && npc.id === w.save.firstFriend) return firstDayIntro(game, actor);
 
   const c = await Conversation.start(game, [actor]);

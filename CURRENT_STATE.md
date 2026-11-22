@@ -1,5 +1,36 @@
 # Current State
 
+## Niji Mall Phase 1 (2026-11-22, uncommitted)
+- Three connected floor scenes: `mall` (1F Shopping), `mall2` (2F Food Court),
+  `mall3` (3F Game Center shell). All share location `mall`, retain floor names,
+  and have escalators, an elevator, directories and clear named arrival spawns.
+  Floor travel preserves time and engaged companion identity. Shops, purchases,
+  souvenirs, menus and existing meal outing/reward behavior are preserved.
+- NPCs occupy one derived floor per slot; shopping is on 1F, meals and explicit
+  hangout pairs on 2F, and games interests can visit 3F via an independent hash.
+  Schedules and generator RNG are unchanged. The 3F machines have no interactions;
+  exported anchors reserve racing, crane and rhythm positions for later phases.
+- Validation: `npm test` 84/84 PASS; `npm run build` PASS;
+  `npm run e2e:mall`, `npm run e2e:perf` and `npm run e2e` PASS.
+  Perf draw calls: mall 16/90, mall2 26/90, mall3 16/90 (SwiftShader proxy).
+  Read-only navigation state: `window.__esl.mallTravel` (floor, travelling, via),
+  alongside existing scene, actor, world time and music state.
+- Visual evidence: six gameplay frames in
+  `%TEMP%/esl-mall-floors-20261122/`; three settled viewer frames in
+  `%TEMP%/esl-mall-floors-viewer-20261122/` from
+  `node scripts/shots.mjs mall mall2 mall3` (PASS). The initial viewer attempt
+  timed out waiting for fonts; the dedicated-server rerun passed. Broad e2e
+  screenshots are in `%TEMP%/esl-mall-floors-e2e-20261122/`.
+  No obvious wall gaps, overlaps or z-fighting appeared. Physical storefront
+  labels/wall plaques remain small in wide views; HUD banners and walk-up prompts
+  are readable. Claude retains final aesthetic judgment; no Chromebook run yet.
+- Changed files: `src/engine/scenes/mall.js`, `src/game/game.js`,
+  `src/game/npcs.js`, `src/world/mall.js`, `src/activities/mall.js`,
+  `src/dialogue/talk.js`, `src/dev/viewer.js`, `src/core/music.js`,
+  `src/world/mall.test.mjs`, `src/world/social.test.mjs`, `scripts/mall.mjs`,
+  `scripts/perf.mjs`, this file and `DESIGN_DECISIONS.md`.
+- Phases 2–4 are not implemented. No commit or push performed.
+
 ## Status (2026-11-19)
 School-life expansion built on branch `school-life-expansion`. Part 1, Niji Mall, is committed as `d078832`; Part 2, visiting a friend's home, as `e0274e1`; Part 3, the school day with the music room, gym and art room, as `3af830f` (see DESIGN_DECISIONS.md 2026-11-19); Part 4, procedural music, as `2d8c0e7`. All four parts were merged to `main` (fast-forward) and deployed to GitHub Pages on 2026-11-19 (gh-pages `0fc4ee7`).
 

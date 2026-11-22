@@ -1,9 +1,87 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MALL_SHOPS, WEEKLY_ALLOWANCE, mallItem, pocketMoney, buyMallItem } from './mall.js';
+import { MALL_SHOPS, WEEKLY_ALLOWANCE, mallItem, pocketMoney, buyMallItem, mallFloorFor } from './mall.js';
+import { NpcManager } from '../game/npcs.js';
+import { CollisionWorld } from '../engine/collision.js';
 import { buildClass } from './generator.js';
 import { resolveSlot, weekendMallSlot } from './schedule.js';
 import { DEFAULT_ROSTER } from '../data/roster.js';
+
+test('mall floor selection keeps shopping on 1F and meals and meetings on 2F', () => {
+  const npc = { id: 'gamer', likes: ['games'] };
+  for (let day = 0; day < 28; day++) {
+    assert.equal(mallFloorFor(npc, { act: 'shopping' }, day), 1);
+    for (const act of ['mall', 'sweets', 'cafe', 'eating', 'meeting']) {
+      assert.equal(mallFloorFor(npc, { act }, day), 2);
+    }
+    assert.equal(mallFloorFor(npc, { act: 'games', hangout: 'pair' }, day), 2, 'a hangout pair meets together');
+  }
+});
+
+test('mall floors are deterministic, exclusive and independent of saved schedules', () => {
+  const roster = buildClass(DEFAULT_ROSTER, 'mall-floor-test');
+  const before = structuredClone(roster);
+  const arcadeDays = new Set();
+  for (const npc of roster) for (let day = 0; day < 14; day++) {
+    for (const act of ['shopping', 'mall', 'games', 'reading']) {
+      const slot = { loc: 'mall', act, with: [] };
+      const floor = mallFloorFor(npc, slot, day);
+      assert.ok([1, 2, 3].includes(floor));
+      assert.equal([1, 2, 3].filter((f) => f === floor).length, 1);
+      assert.equal(mallFloorFor(structuredClone(npc), structuredClone(slot), day), floor);
+      if (floor === 3) assert.ok(npc.likes.includes('games'));
+    }
+    arcadeDays.add(mallFloorFor({ id: 'games-friend', likes: ['games'] }, { act: 'games' }, day));
+    assert.notEqual(mallFloorFor({ id: npc.id, likes: ['reading'] }, { act: 'games' }, day), 3);
+  }
+  assert.deepEqual([...arcadeDays].sort(), [1, 3], 'games interests visit the arcade on some deterministic days');
+  assert.deepEqual(roster, before, 'floor selection never changes generated interests or schedules');
+});
+
+test('mall population places each scheduled classmate on exactly one floor', () => {
+  const npcs = [
+    { id: 'shopper', likes: ['games'] }, { id: 'diner', likes: ['games'] },
+    { id: 'gamer', likes: ['games'] }, { id: 'pair-a', likes: ['games'] }, { id: 'pair-b', likes: ['reading'] },
+  ];
+  const slots = [
+    { loc: 'mall', act: 'shopping', with: [] }, { loc: 'mall', act: 'mall', with: [] },
+    { loc: 'mall', act: 'games', with: [] },
+    { loc: 'mall', act: 'mall', with: ['pair-b'], hangout: 'pair' },
+    { loc: 'mall', act: 'mall', with: ['pair-a'], hangout: 'pair' },
+  ];
+  const placed = new Map(npcs.map((n) => [n.id, []]));
+  for (const [index, sceneId] of ['mall', 'mall2', 'mall3'].entries()) {
+    const world = { npcs, day: 6, slot: (n) => slots[npcs.indexOf(n)], plansNow: () => [], schoolTime: false, evening: true, daily: {}, save: { flags: { fd: 'done' } } };
+    const manager = new NpcManager({ world, sceneId, scene: { collision: { dynamic: [] } } });
+    manager._placeSingle = (e) => placed.get(e.n.id).push(index + 1);
+    manager._placeGroup = (group) => group.forEach(manager._placeSingle);
+    manager.populate();
+  }
+  for (const [i, n] of npcs.entries()) assert.deepEqual(placed.get(n.id), [mallFloorFor(n, slots[i], 6)]);
+  assert.deepEqual(placed.get('pair-a'), placed.get('pair-b'));
+});
+
+test('floor companions retain actor identity and arrive without overlap or scheduled duplicates', () => {
+  const npc = { id: 'companion', likes: ['games'] };
+  const disposed = [];
+  const char = { root: { visible: true, removeFromParent() {} }, yaw: 0,
+    dispose: () => disposed.push(npc.id), setPosition(x, z) { this.x = x; this.z = z; }, setBase() {}, showBag() {} };
+  const actor = { npc, char, engaged: true, collider: { x: 0, z: 0, r: 0.3 }, mode: 'sit', walk: {} };
+  const collision = new CollisionWorld({ bounds: { minX: -5, maxX: 5, minZ: -5, maxZ: 5 } });
+  const world = { npcs: [npc], day: 6, slot: () => ({ loc: 'mall', act: 'mall', with: [] }), plansNow: () => [], schoolTime: false, evening: true, daily: {}, save: { flags: { fd: 'done' } } };
+  const player = { x: 0, z: 0, collider: { x: 0, z: 0, r: 0.3 } };
+  const manager = new NpcManager({ world, player, sceneId: 'mall2', scene: { collision, root: { add() {} } } });
+  manager.actors = [actor];
+  manager._placeSingle = () => assert.fail('an engaged companion must not also spawn from their schedule');
+  manager.populate([actor]);
+  assert.deepEqual(disposed, []);
+  assert.equal(manager.actorFor(npc.id), actor);
+  assert.equal(manager.actors.length, 1);
+  assert.ok(actor.engaged);
+  assert.equal(actor.walk, null);
+  assert.ok(Math.hypot(char.x - player.x, char.z - player.z) >= 0.6);
+  assert.ok(collision.dynamic.includes(actor.collider));
+});
 
 test('mall shops have distinct, round-yen prices and readable item hints', () => {
   assert.equal(MALL_SHOPS.length, 3);

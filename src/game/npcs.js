@@ -11,6 +11,7 @@ import { StaticBuilder } from '../engine/builder.js';
 import { makeBlobShadow } from '../engine/materials.js';
 import { styleData, styleLine, styleGesture } from '../world/personality.js';
 import { canApproach, noteApproach, openOffers } from '../world/friendship.js';
+import { mallFloorFor } from '../world/mall.js';
 
 export const TEACHER = {
   id: 'teacher', name: 'Ms. Aoki', role: 'Teacher 先生', color: '#4C6FFF', voice: { pitch: 1.05, rate: 0.9 },
@@ -59,8 +60,11 @@ export class NpcManager {
 
   get scene() { return this.game.scene; }
 
-  clear() {
-    for (const a of this.actors) { a.char.root.removeFromParent(); a.char.dispose(); }
+  clear({ preserve = [] } = {}) {
+    for (const a of this.actors) {
+      a.char.root.removeFromParent();
+      if (!preserve.includes(a)) a.char.dispose();
+    }
     for (const b of this.balls) b.mesh.removeFromParent();
     this.actors = [];
     this.balls = [];
@@ -69,8 +73,8 @@ export class NpcManager {
   }
 
   // ------------------------------------------------------------ placement
-  populate() {
-    this.clear();
+  populate(companions = []) {
+    this.clear({ preserve: companions });
     const game = this.game;
     const w = game.world;
     const scene = this.scene;
@@ -78,12 +82,42 @@ export class NpcManager {
     this.placed = [];
     this.usedSpots = new Set();
     this.usedGroups = new Set();
+    const companionIds = new Set(companions.map((a) => a.npc.id));
+    // Active conversations retain these actor objects across floors. Place them
+    // first so ordinary scheduled classmates cannot occupy their arrival space.
+    if (companions.length) {
+      scene.collision.dynamic = [game.player.collider];
+      companions.forEach((a, k) => {
+        const p = scene.collision.nearestFree(game.player.x + (k % 2 ? -1 : 1) * (1.0 + Math.floor(k / 2) * 0.85), game.player.z + 0.45, 0.36, { dynamic: true });
+        a.char.setPosition(p.x, p.z);
+        a.char.setBase('idle');
+        a.char.showBag(false);
+        a.char.root.visible = true;
+        a.walk = null;
+        a.waiting = null;
+        a.route = null;
+        a.ballGame = null;
+        a.hiddenForActivity = false;
+        a.mode = a.savedMode = 'stand';
+        a.home = { x: p.x, z: p.z, yaw: a.char.yaw };
+        Object.assign(a.collider, { x: p.x, z: p.z, r: 0.3 });
+        scene.root.add(a.char.root);
+        scene.collision.dynamic.push(a.collider);
+        this.actors.push(a);
+        this.placed.push(p);
+      });
+    }
     const present = [];
     for (const n of w.npcs) {
+      if (companionIds.has(n.id)) continue;
       const inSchoolRoom = w.schoolTime && ['musicroom', 'gym', 'artroom'].includes(sceneId);
       const slot = inSchoolRoom ? { loc: sceneId, act: 'school', with: [] } : w.slot(n);
       const L = LOCATIONS[slot.loc];
-      if (!L || L.scene !== sceneId) continue;
+      if (!L) continue;
+      if (slot.loc === 'mall') {
+        const floor = { mall: 1, mall2: 2, mall3: 3 }[sceneId];
+        if (!floor || mallFloorFor(n, slot, w.day) !== floor) continue;
+      } else if (L.scene !== sceneId) continue;
       present.push({ n, slot, zone: zoneFor(slot.loc) });
     }
     const take = (id) => { const i = present.findIndex((p) => p.n.id === id); return i >= 0 ? present.splice(i, 1)[0] : null; };
@@ -100,9 +134,9 @@ export class NpcManager {
       const t = scene.teacherSpot;
       this._spawn({ npc: TEACHER, special: 'teacher', adult: true }, t.x, t.z, t.yaw, 'stand');
     }
-    if (['cafe', 'mall'].includes(sceneId) && !w.evening) {
+    if (['cafe', 'mall2'].includes(sceneId) && !w.evening) {
       const s = scene.staffSpot;
-      const staff = sceneId === 'mall' ? { ...STAFF, name: 'Food Court', role: 'Food Court フードコート' } : STAFF;
+      const staff = sceneId === 'mall2' ? { ...STAFF, name: 'Food Court', role: 'Food Court フードコート' } : STAFF;
       this._spawn({ npc: staff, special: 'staff', adult: true }, s.x, s.z, s.yaw, 'stand');
     }
 
@@ -125,7 +159,7 @@ export class NpcManager {
         } else if (sceneId === 'town' && plan.loc === 'park') {
           const f = scene.field;
           this._spawn(e, f.b.x + k * 1.2 - (n - 1) * 0.6, f.b.z, 0, 'stand', { gesture: 'cheer', plan: true, prop: k === 0 && plan.act === 'soccer' ? 'ball' : k === 0 && plan.act === 'catch' ? 'baseball' : null });
-        } else if (sceneId === 'cafe' || sceneId === 'mall') {
+        } else if (sceneId === 'cafe' || sceneId === 'mall2') {
           const seat = scene.seats.find((s) => s.id === `T2-${[1, 3, 2][k] ?? 1}`) || scene.seats.find((s) => s.id === 'T2-1');
           this._spawn(e, seat.x, seat.z, seat.yaw, 'sit', { seatY: seat.seatY, plan: true });
         } else if (sceneId === 'home') {
@@ -181,7 +215,7 @@ export class NpcManager {
     // friend comes in person (the rest of their initiative goes to messages).
     const fdDone = w.save.flags.fd === 'done';
     for (const a of this.actors) {
-      if (a.special || a.plan) continue;
+      if (a.special || a.plan || a.engaged) continue;
       const id = a.npc.id;
       if (w.daily.approached[id]) continue;
       if (w.save.flags.fd === 'slept' && id === w.save.introNpc) { this.approachQueue.unshift({ actor: a, delay: 1.0, scripted: true }); continue; }

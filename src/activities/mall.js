@@ -89,10 +89,14 @@ export async function orderAtMall(game, target) {
 }
 
 export async function playMall(game, actors) {
-  if (game.sceneId !== 'mall') {
+  if (game.sceneId !== 'mall2') {
     const ids = actors.map((a) => a.npc.id);
-    await game.enterScene('mall', 'door');
-    actors = ids.map((id, i) => game.npcs.actorFor(id) || game.npcs.ensure(game.world.npc(id), 1 + i, -0.8, 0));
+    if (game.locationId !== 'mall') {
+      await game.enterScene('mall', 'door');
+      actors = ids.map((id, i) => game.npcs.actorFor(id) || game.npcs.ensure(game.world.npc(id), 1 + i, -0.8, 0));
+    }
+    for (const a of actors) game.npcs.engage(a);
+    await game.changeFloor(2, 'elevator');
   }
   const scene = game.scene, w = game.world;
   for (const a of actors) game.npcs.engage(a);
@@ -102,9 +106,9 @@ export async function playMall(game, actors) {
     const counter = MALL_COUNTERS.find((s) => s.foods.includes(food.id));
     const target = scene.interact.find((it) => it.counter === counter.id);
     const kiosk = scene.foodCounters.find((s) => s.id === counter.id);
-    const dx = Math.sin(kiosk.yaw);
-    game.player.place(target.x + dx * 0.3, target.z, kiosk.yaw + Math.PI);
-    actors.forEach((a, i) => { a.char.setBase('idle'); a.char.setPosition(target.x + dx * (1.3 + i * 0.7), target.z + 0.6); a.char.faceToward(kiosk.x, kiosk.z); });
+    const dx = Math.sin(kiosk.yaw), dz = Math.cos(kiosk.yaw);
+    game.player.place(target.x + dx * 0.3, target.z + dz * 0.3, kiosk.yaw + Math.PI);
+    actors.forEach((a, i) => { a.char.setBase('idle'); a.char.setPosition(target.x + dx * (1.3 + i * 0.7) + dz * 0.6, target.z + dz * (1.3 + i * 0.7) + dx * 0.6); a.char.faceToward(kiosk.x, kiosk.z); });
     counterCamera(game, target);
     return counterSpeaker(game, counter.en);
   };
@@ -158,9 +162,13 @@ export async function playMall(game, actors) {
     const next = await c.ask([opt('shop', "Let's look at one shop!", 'お店を1つ見よう！', { emoji: '🛍️', phrases: ['look at one shop', 'shop'], keys: [['shop']] }), opt('bye', 'Thank you! See you!', 'ありがとう！またね！', { emoji: '👋', phrases: [...PHRASES.bye, ...PHRASES.thanks], keys: [['bye', 'see', 'thank']] })]);
     if (next.id === 'shop') {
       const shop = await c.ask(MALL_SHOPS.map((s) => opt(s.id, `Let's go to ${s.en}!`, `${s.ja}のお店に行こう！`, { emoji: s.emoji, phrases: [s.en], keys: [[s.id, s.en]] })));
-      const target = scene.interact.find((it) => it.kind === 'mallShop' && it.shop === shop.id);
       game.sitting = false;
       game.player.char.setBase('idle');
+      for (const a of actors) a.char.setBase('idle');
+      for (const m of items) m.removeFromParent();
+      game.dialogue.close();
+      await game.changeFloor(1, 'elevator');
+      const target = game.scene.interact.find((it) => it.kind === 'mallShop' && it.shop === shop.id);
       game.player.place(target.x, target.z + 0.8, Math.PI);
       actors.forEach((a, i) => { a.char.setBase('idle'); a.char.setPosition(target.x + 1 + i * 0.7, target.z + 1); });
       await shopAtMall(game, target, { conversation: c, friends: actors });

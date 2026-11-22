@@ -12,6 +12,8 @@ const THEMES = {
   cafe:       { bpm: 78, root: 57, notes: [0, 3, 2, 4, 3, 1, 2, 0] },
   home:       { bpm: 70, root: 55, notes: [2, 0, 1, 0, 3, 1, 2, 0] },
   mall:       { bpm: 92, root: 62, notes: [0, 1, 3, 2, 4, 3, 1, 2] },
+  mall2:      { bpm: 92, root: 62, notes: [0, 1, 3, 2, 4, 3, 1, 2] },
+  mall3:      { bpm: 92, root: 62, notes: [0, 1, 3, 2, 4, 3, 1, 2] },
   friendhouse:{ bpm: 80, root: 57, notes: [1, 3, 2, 0, 2, 4, 3, 0] },
   musicroom:  { bpm: 80, root: 60, notes: [0, 2, 3, 4, 3, 2, 1, 0] },
   gym:        { bpm: 96, root: 55, notes: [0, 2, 0, 3, 1, 4, 2, 1] },

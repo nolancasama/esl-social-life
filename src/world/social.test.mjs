@@ -144,7 +144,7 @@ test('hangout pairs stay together ahead of routine groups and lost-item placemen
       save: { flags: { fd: 'done' } }, daily: { lost: lost ? { npcId: 'a', period: 1 } : null, lostDone: false },
     };
     const scene = { collision: { dynamic: [] } };
-    const manager = new NpcManager({ world, scene, sceneId: loc === 'park' ? 'town' : loc });
+    const manager = new NpcManager({ world, scene, sceneId: loc === 'park' ? 'town' : 'mall2' });
     const groups = [], singles = [];
     manager._placeGroup = (g) => groups.push(g.map((e) => e.n.id));
     manager._placeSingle = (e) => singles.push(e.n.id);

@@ -10,14 +10,23 @@ const H = harness(page, out);
 const { log, shot, sleep, pump, settle, expect } = H;
 const ev = (fn, arg) => page.evaluate(fn, arg);
 const idle = () => ev(() => window.__esl.mode === 'explore' && !window.__esl.hud.showingCard);
+const precondition = async (label, predicate, arg) => {
+  try { await page.waitForFunction(predicate, arg, { timeout: 15000 }); }
+  catch { throw new Error(`HARNESS_PRECONDITION_FAILED: ${label}`); }
+};
+const onFloor = (scene) => precondition(`arrived on ${scene}`, (id) => {
+  const g = window.__esl;
+  return g.sceneId === id && !g.mallTravel.travelling && g.mode === 'explore';
+}, scene);
 const use = async (id) => {
+  await precondition(`exploring before ${id}`, () => window.__esl.mode === 'explore' && !window.__esl.hud.showingCard && performance.now() > (window.__esl.interactBlockUntil || 0));
   await ev((id) => {
     const g = window.__esl, target = g.scene.interact.find((it) => it.id === id);
-    if (!target) throw new Error(`Missing interaction: ${id}`);
+    if (!target) throw new Error(`HARNESS_PRECONDITION_FAILED: Missing interaction: ${id}`);
     const p = g.scene.collision.nearestFree(target.x, target.z, 0.3);
     g.player.place(p.x, p.z, 0);
   }, id);
-  await sleep(750);
+  await precondition(`walk-up prompt for ${id}`, (id) => window.__esl.target?.it?.id === id, id);
   const button = page.locator('.action');
   await button.waitFor({ state: 'visible', timeout: 3000 });
   await button.click();
@@ -66,6 +75,64 @@ try {
   expect(bought.souvenirs.some((s) => s.kind === 'mall_robot'), 'purchase saved on the souvenir shelf');
   expect(bought.period === 0, 'shopping uses no period');
 
+  const travelBefore = await ev(() => {
+    const g = window.__esl, npc = g.world.npcs[0];
+    const actor = g.npcs.actorFor(npc.id) || g.npcs.ensure(npc, 5, 2, 0);
+    g.npcs.engage(actor);
+    window.__mallCompanion = actor;
+    return { time: JSON.stringify(g.world.save.time), memories: g.world.save.memories.length, xp: g.world.rel(npc.id).xp };
+  });
+  const floorChecks = async (floor) => {
+    const r = await ev(async (floor) => {
+      const g = window.__esl, a = window.__mallCompanion, p = g.player;
+      const { mallFloorFor } = await import('/src/world/mall.js');
+      return {
+        location: g.locationId, floor: g.mallTravel.floor, theme: g.music.theme,
+        companion: g.npcs.actorFor(a.npc.id) === a && a.char.root.parent === g.scene.root,
+        clear: g.scene.collision.isFree(p.x, p.z, 0.3) && g.scene.collision.isFree(a.char.root.position.x, a.char.root.position.z, 0.3),
+        distance: Math.hypot(p.x - a.char.root.position.x, p.z - a.char.root.position.z),
+        unique: new Set(g.npcs.actors.map((n) => n.npc.id)).size === g.npcs.actors.length,
+        scheduled: g.npcs.actors.filter((n) => !n.special && n !== a).every((n) => mallFloorFor(n.npc, g.world.slot(n.npc), g.world.day) === floor),
+        spawns: ['escUp', 'escDown', 'elevator', ...(floor === 1 ? ['door'] : [])].every((id) => { const s = g.scene.spawns[id]; return s && g.scene.collision.isFree(s.x, s.z, 0.3); }),
+      };
+    }, floor);
+    expect(r.location === 'mall' && r.floor === floor && r.theme === ['mall', 'mall2', 'mall3'][floor - 1], `floor ${floor} has mall location, floor state and music`);
+    expect(r.companion && r.clear && r.distance >= 0.65 && r.distance < 3, `floor ${floor} carries the same companion beside a clear player spawn`);
+    expect(r.unique && r.scheduled && r.spawns, `floor ${floor} has unique scheduled residents and clear named spawns`);
+  };
+  await use('escUp');
+  await onFloor('mall2');
+  await floorChecks(2);
+  await shot('mall2-dining');
+  await use('directory');
+  await precondition('2F directory lists all floors', () => /1F Shopping/.test(document.querySelector('.dlg-panel')?.textContent || '') && document.querySelectorAll('.dlg-cards .card').length > 0);
+  expect(await pump(idle, { label: '2F-directory', max: 30, prefer: ['Thank you!'] }), '2F directory ends in a choice');
+  await use('escUp');
+  await onFloor('mall3');
+  await floorChecks(3);
+  await shot('mall3-arcade-shell');
+  expect(await ev(() => window.__esl.scene.interact.every((it) => ['mallEscalator', 'mallElevator', 'mallDirectory'].includes(it.kind))), 'arcade shell has no machine interactions');
+  await use('directory');
+  expect(await pump(idle, { label: '3F-directory', max: 30, prefer: ['Thank you!'] }), '3F directory ends in a choice');
+  await use('elevator');
+  await precondition('elevator choices omit current 3F', () => document.querySelectorAll('.dlg-cards .card').length === 3 && /1F Shopping/.test(document.querySelector('.dlg-cards')?.textContent || '') && !/3F Game Center/.test(document.querySelector('.dlg-cards')?.textContent || ''));
+  await page.locator('.dlg-cards .card', { hasText: '1F Shopping' }).click();
+  await onFloor('mall');
+  await floorChecks(1);
+  await use('escUp');
+  await onFloor('mall2');
+  await use('escDown');
+  await onFloor('mall');
+  await use('elevator');
+  await precondition('elevator offers 2F', () => /2F Food Court/.test(document.querySelector('.dlg-cards')?.textContent || ''));
+  await page.locator('.dlg-cards .card', { hasText: '2F Food Court' }).click();
+  await onFloor('mall2');
+  expect(await ev((before) => {
+    const g = window.__esl, a = window.__mallCompanion;
+    const unchanged = JSON.stringify(g.world.save.time) === before.time && g.world.save.memories.length === before.memories && g.world.rel(a.npc.id).xp === before.xp;
+    g.npcs.release(a); delete window.__mallCompanion;
+    return unchanged;
+  }, travelBefore), 'all floor trips preserve day, period, XP and memories');
   await use('ramen');
   expect(await pump(idle, { label: 'solo-order', max: 100, prefer: ['I want ramen.', "I'd like ramen, please.", 'Thank you!'] }), 'solo ramen order finished');
   await settle();
@@ -78,8 +145,8 @@ try {
   await settle();
   const plan = await ev(() => window.__esl.world.save.plans.find((p) => p.status === 'pending' && p.loc === 'mall') || null);
   expect(plan?.npcIds.length === 2 && plan.act === 'mall' && plan.day === 6 && plan.period === 0, 'phone made a mall plan with two friends');
-  if (!plan) throw new Error('No mall plan to play');
-  await ev(async (plan) => { const g = window.__esl; g.world.save.time = { day: plan.day, period: plan.period }; g.world.ensureDaily(); g.hud.queue.length = 0; await g.enterScene('mall', 'door'); }, plan);
+  if (!plan) throw new Error('HARNESS_PRECONDITION_FAILED: No mall plan to play');
+  await ev(async (plan) => { const g = window.__esl; g.world.save.time = { day: plan.day, period: plan.period }; g.world.ensureDaily(); g.hud.queue.length = 0; await g.enterScene('mall2', 'elevator'); }, plan);
   await settle();
   const before = await ev((ids) => { const w = window.__esl.world; return ids.map((id) => ({ id, xp: w.rel(id).xp, level: w.level(id), memories: w.rel(id).memories.length })); }, plan.npcIds);
   // Walk to a waiting friend, then use the same Talk action as the keyboard.

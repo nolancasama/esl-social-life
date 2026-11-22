@@ -9,7 +9,7 @@ import { CameraRig } from '../engine/camera.js';
 import { buildTown } from '../engine/scenes/town.js';
 import { buildClassroom } from '../engine/scenes/classroom.js';
 import { buildCafe } from '../engine/scenes/cafe.js';
-import { buildMall } from '../engine/scenes/mall.js';
+import { buildMall, buildMall2, buildMall3 } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
 import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
 import { buildMusicRoom, buildGym, buildArtRoom } from '../engine/scenes/schoolrooms.js';
@@ -40,7 +40,8 @@ import { recoverInterrupted, snapshot, offerEvent, completeEvent, instance, npcF
 import { runEvent, eventTitle } from '../dialogue/events.js';
 import { confirmTime } from '../dialogue/common.js';
 
-const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom };
+const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, mall2: buildMall2, mall3: buildMall3, home: buildHome, friendhouse: buildFriendHouse, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom };
+const MALL_FLOORS = ['mall', 'mall2', 'mall3'];
 const tmpV = new THREE.Vector3();
 
 export class Game {
@@ -146,11 +147,13 @@ export class Game {
   // ------------------------------------------------------------ location
   get locationId() {
     if (this.sceneId === 'town') return this.scene.zoneOf(this.player.x, this.player.z) === 'park' ? 'park' : 'town';
+    if (MALL_FLOORS.includes(this.sceneId)) return 'mall';
     return this.sceneId;
   }
 
   locationName() {
     const id = this.locationId;
+    if (id === 'mall') return this.scene.name;
     if (id === 'home') return { en: 'My Room', ja: '自分の部屋' };
     const L = LOCATIONS[id];
     return L ? { en: L.en, ja: L.ja } : { en: 'Sakura Town', ja: 'さくら町' };
@@ -177,9 +180,9 @@ export class Game {
     await wait(ms * 0.6);
   }
 
-  async enterScene(id, spawnId, { fade = true, banner = true } = {}) {
+  async enterScene(id, spawnId, { fade = true, banner = true, companions = [] } = {}) {
     const go = async () => {
-      if (this.scene) this.npcs.clear();
+      if (this.scene) this.npcs.clear({ preserve: companions });
       const scene = this.getScene(id);
       this.scene = scene;
       this.sceneId = id;
@@ -194,7 +197,7 @@ export class Game {
       this.player.place(sp.x, sp.z, sp.yaw);
       this.player.char.showBag(id === 'town' && !this.world.weekend && this.world.period === AFTERNOON);
       scene.collision.dynamic = [this.player.collider];
-      this.npcs.populate();
+      this.npcs.populate(companions);
       const camCfg = { ...scene.camera };
       if (camCfg.mode === 'follow') camCfg.yaw = sp.yaw + Math.PI;
       this.camera.configure(camCfg, this.player.char, scene.collision);
@@ -206,6 +209,32 @@ export class Game {
     };
     if (fade) { sfx.door(); await this.fade(go); } else await go();
     if (banner) this.hud.location(this.locationName());
+  }
+
+  /** Read-only semantic travel state for the floor-navigation harness. */
+  get mallTravel() {
+    return Object.freeze({ floor: MALL_FLOORS.indexOf(this.sceneId) + 1, travelling: !!this._floorTravel, via: this._floorVia || null });
+  }
+
+  async changeFloor(floor, via = 'elevator') {
+    const from = MALL_FLOORS.indexOf(this.sceneId) + 1;
+    if (!from || !Number.isInteger(floor) || floor < 1 || floor > 3 || floor === from || this._floorTravel) return;
+    if (!['escUp', 'escDown', 'elevator'].includes(via)) return;
+    this._floorTravel = true;
+    this._floorVia = via;
+    const mode = this.mode;
+    const companions = this.npcs.actors.filter((a) => a.engaged && !a.special);
+    this.player.stop();
+    this.setMode('transition');
+    try {
+      const spawn = via === 'escUp' ? 'escDown' : via === 'escDown' ? 'escUp' : 'elevator';
+      await this.fade(() => this.enterScene(MALL_FLOORS[floor - 1], spawn, { fade: false, banner: false, companions }), 160);
+      const name = this.locationName();
+      this.hud.location({ ...name, en: `${floor > from ? '↑' : '↓'} ${name.en}` });
+    } finally {
+      this._floorTravel = false;
+      this.setMode(mode);
+    }
   }
 
   _applyRain() {
@@ -514,10 +543,23 @@ export class Game {
       case 'friendhouse': return this._friendHouseDoor();
       case 'mallShop': return this.activities.mallShop(it);
       case 'mallFood': return this.activities.mallCounter(it);
+      case 'mallEscalator': return this.changeFloor(it.floor, it.via);
+      case 'mallElevator': {
+        const floor = MALL_FLOORS.indexOf(this.sceneId) + 1;
+        const names = ['1F Shopping', '2F Food Court', '3F Game Center'];
+        const hints = ['1かい ショッピング', '2かい フードコート', '3かい ゲームセンター'];
+        const choice = await this.askSolo({ name: 'Elevator', color: '#2F9E9E', en: 'Where do you want to go?', ja: '何かいに行きたい？' }, names.flatMap((name, i) => i + 1 === floor ? [] : [opt(String(i + 1), name, hints[i])]).concat(opt('stay', 'Stay on this floor.', 'このかいにいる。')));
+        if (choice !== 'stay') await this.changeFloor(Number(choice), 'elevator');
+        return;
+      }
       case 'mallDirectory': {
-        const choice = await this.askSolo({ name: '🛍️ Niji Mall', color: '#2F9E9E', en: 'Three shops and four food counters. Where do you want to go?', ja: 'お店が3つ、食べもののお店が4つ。どこに行きたい？' }, [opt('shops', "Let's look at the shops!", 'お店を見よう！', { phrases: ['shops', 'look at the shops'], keys: [['shop']] }), opt('food', "Let's go to the food court!", 'フードコートに行こう！', { phrases: ['food court', 'food'], keys: [['food']] })]);
-        const target = this.scene.interact.find((t) => choice === 'shops' ? t.shop === 'toys' : t.counter === 'ramen');
-        this.hud.setGoal({ icon: choice === 'shops' ? '🛍️' : '🍜', en: `Go to ${target.label.en}`, ja: `${target.label.ja}へ行こう`, loc: 'mall', target: { x: target.x, z: target.z, label: target.label.en }, temp: true, local: true });
+        const choice = await this.askSolo({ name: '🛍️ Niji Mall', color: '#2F9E9E', en: '1F Shopping: Toys & Games, Books & Stationery, Sports & Clothes.\n2F Food Court: Rainbow Ramen, Sunny Burgers, Little Sushi, Cloud Crepes & Ice Cream.\n3F Game Center: arcade machines and a waiting area.', ja: '1かい：おもちゃ・本・スポーツ\n2かい：フードコート\n3かい：ゲームセンター' }, [opt('shops', "Let's look at the shops!", '1かいのお店を見よう！', { keys: [['shop']] }), opt('food', "Let's go to the food court!", '2かいのフードコートに行こう！', { keys: [['food']] }), opt('thanks', 'Thank you!', 'ありがとう！')]);
+        if (choice === 'thanks') return;
+        const floor = choice === 'shops' ? 1 : 2;
+        const destination = this.getScene(MALL_FLOORS[floor - 1]);
+        const local = destination === this.scene;
+        const target = local ? destination.interact.find((t) => choice === 'shops' ? t.shop === 'toys' : t.counter === 'ramen') : this.scene.interact.find((t) => t.kind === 'mallElevator');
+        this.hud.setGoal({ icon: choice === 'shops' ? '🛍️' : '🍜', en: local ? `Go to ${target.label.en}` : `Take the elevator to ${floor}F`, ja: local ? `${target.label.ja}へ行こう` : `${floor}かいへ行こう`, loc: 'mall', target: { x: target.x, z: target.z, label: target.label.en }, temp: true, local: true });
         return;
       }
       case 'board': return this.menus.open('board');
@@ -677,7 +719,7 @@ export class Game {
       if (unread) this.hud.toast({ icon: '📱', en: `You have ${unread} new message${unread > 1 ? 's' : ''}! Check the tablet on your desk.`, ja: '新しいメッセージ！つくえのタブレットを見てね。', ms: 4500 });
     } else {
       await this.hud.transition({ icon: '☀️', title: 'Afternoon', sub: 'More free time!', ja: '午後も自由時間！', ms: 1400 });
-      const spawnBack = { town: 'crossroads', cafe: 'door', mall: 'door', home: 'center', classroom: 'door' }[this.sceneId];
+      const spawnBack = { town: 'crossroads', cafe: 'door', mall: 'door', mall2: 'elevator', mall3: 'elevator', home: 'center', classroom: 'door' }[this.sceneId];
       await this.enterScene(this.sceneId, this.sceneId === 'town' ? (this.locationId === 'park' ? 'park' : 'crossroads') : spawnBack, { fade: false });
     }
     this.setMode('explore');

@@ -8,7 +8,7 @@ import { Character } from '../engine/character.js';
 import { buildTown } from '../engine/scenes/town.js';
 import { buildClassroom } from '../engine/scenes/classroom.js';
 import { buildCafe } from '../engine/scenes/cafe.js';
-import { buildMall } from '../engine/scenes/mall.js';
+import { buildMall, buildMall2, buildMall3 } from '../engine/scenes/mall.js';
 import { buildHome } from '../engine/scenes/home.js';
 import { buildFriendHouse } from '../engine/scenes/friendhouse.js';
 import { buildMusicRoom, buildGym, buildArtRoom } from '../engine/scenes/schoolrooms.js';
@@ -19,7 +19,7 @@ export function runViewer(which, params) {
   const stage = document.getElementById('stage');
   const r = new Renderer(stage);
   const npcs = buildClass(DEFAULT_ROSTER, 'viewer');
-  const builders = { town: buildTown, classroom: buildClassroom, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom, cafe: buildCafe, mall: buildMall, home: buildHome, friendhouse: buildFriendHouse };
+  const builders = { town: buildTown, classroom: buildClassroom, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom, cafe: buildCafe, mall: buildMall, mall2: buildMall2, mall3: buildMall3, home: buildHome, friendhouse: buildFriendHouse };
   const host = npcs[Number(params.get('friend') || 0)] || npcs[0];
   const scene = (builders[which] || buildTown)({ playerName: 'Ken', seed: 'viewer', npc: host });
   const period = Number(params.get('period') || 0);

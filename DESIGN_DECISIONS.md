@@ -134,6 +134,23 @@ next: (1) floors, navigation, signage, NPC floors; (2) solo/group eating and
 food prices; (3) arcade floor and minigames; (4) flexible outings and companion
 floor changes. `e2e:mall` is extended per phase; perf covers all three floors.
 
+**Phase 1 implementation (2026-11-22)**
+- Floor travel preserves engaged actor/Character objects, rather than recreating
+  companions: active conversations hold those references. Destination schedules
+  exclude their ids and place ordinary classmates around the arrival space.
+  All floor trips use `changeFloor`; its frozen `mallTravel` snapshot exposes
+  floor, travel-in-progress and device to the acceptance harness.
+- Floor assignment gives shopping precedence on 1F and meals/meetings (including
+  explicit hangout pairs) on 2F. Other ambient mall slots for games interests may
+  visit 3F through the independent id/day hash. Existing schedule variation can
+  produce these slots; generated and stored routines are unchanged.
+- Existing committed meals stay on 2F, with their optional shop visit returning
+  to 1F. This preserves the current outing and reward flow; flexible activity
+  choice, paid food, solo eating and arcade interactions remain later phases.
+- Three additional occupied dining tables use merged static diners and meal
+  geometry; the original sixteen available seats, including T2, remain intact.
+  Arcade machine anchors are exported for later interactions with no prompts yet.
+
 ## 2026-11-19 — School day: music room, gym and art room
 
 - **What:** Three new school rooms (music room, gym, art room; one shared

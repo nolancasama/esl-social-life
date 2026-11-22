@@ -1,3 +1,14 @@
+import { hashString } from '../core/rng.js';
+
+/** Derive one floor without consuming the schedule generator's RNG or editing saves. */
+export function mallFloorFor(npc, slot, day) {
+  if (slot.act === 'shopping') return 1;
+  // Authored meals and meetings stay together, including an explicit hangout pair.
+  if (slot.hangout || ['mall', 'cafe', 'sweets', 'eat', 'eating', 'meet', 'meeting', 'food', 'lunch', 'dinner'].includes(slot.act)) return 2;
+  if (npc.likes?.includes('games') && hashString(`mall-floor-v1|${npc.id}|${day}`) % 2 === 0) return 3;
+  return 1;
+}
+
 // Mall shopping is pure save logic: prices are fixed, and money never borrows.
 export const WEEKLY_ALLOWANCE = 1000;
 
