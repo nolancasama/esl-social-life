@@ -5,8 +5,9 @@ import { Conversation, opt } from '../dialogue/runner.js';
 import { line } from '../dialogue/lines.js';
 import { PHRASES } from '../dialogue/intent.js';
 import { FOODS, food as foodById } from '../data/content.js';
-import { MALL_SHOPS, pocketMoney, buyMallItem, mallFoodPrice, buyMallFood, pendingMallMeal } from '../world/mall.js';
+import { MALL_SHOPS, pocketMoney, buyMallItem, mallFoodPrice, buyMallFood, pendingMallMeal, ownsMallItem, servePaidMallMeal, outingMealId } from '../world/mall.js';
 import { makeId } from '../core/util.js';
+import { faultPoint } from '../core/fault.js';
 import { carryMallMeal, setDownMallMeal, mallMealSnapshot, placeMallDish, consumeMallMeal, cancelMallConsumption, clearMallDishes } from './mall-meal.js';
 import { ARCADE_GAMES, runArcadeGame, standAtMachine } from './arcade.js';
 
@@ -48,14 +49,31 @@ export async function shopAtMall(game, target, { conversation = null, friends = 
   try {
     const balance = pocketMoney(w.save);
     await c.say(who, line(`Welcome! You have ${balance} yen. You get 1,000 yen each week.`, `いらっしゃいませ！おこづかいは${balance}円。毎週1,000円もらえるよ。`));
-    const pick = await c.ask([...shop.items.map((item) => opt(item.id, `Can I see ${item.en}, please?`, `${item.ja}を見せてください。`, { emoji: item.emoji, phrases: [item.en, `can i see ${item.en} please`], keys: [[item.id, item.en.replace(/^a(n)? /, '')]], area: 'shopping', expr: 'shop.see', template: 'Can I see ___, please?' })), opt('no', 'No, thank you.', 'いいえ、けっこうです。', { phrases: ['no thank you'], keys: [['no']] })], { columns: 2 });
-    if (pick.id === 'no') return;
-    const item = shop.items.find((i) => i.id === pick.id);
+    let item = null;
+    for (;;) {
+      const pick = await c.ask([...shop.items.map((it) => opt(it.id, `Can I see ${it.en}, please?`, `${it.ja}を見せてください。`, { emoji: ownsMallItem(w.save, it.id) ? `${it.emoji}✓` : it.emoji, phrases: [it.en, `can i see ${it.en} please`], keys: [[it.id, it.en.replace(/^a(n)? /, '')]], area: 'shopping', expr: 'shop.see', template: 'Can I see ___, please?' })), opt('no', 'No, thank you.', 'いいえ、けっこうです。', { phrases: ['no thank you'], keys: [['no']] })], { columns: 2 });
+      if (pick.id === 'no') return;
+      item = shop.items.find((i) => i.id === pick.id);
+      if (!ownsMallItem(w.save, item.id)) break;
+      // Unique things: say so, never charge, let the player look again or leave.
+      await c.say(who, line(`You have one already! It's in your room. Do you want to see something else?`, 'もう持っているね！自分の部屋にあるよ。ほかのものを見る？', { area: 'possessions', expr: 'a.havealready', template: 'You have one already!' }));
+      const again = await c.ask([
+        opt('look', 'Yes, please!', 'はい、お願いします！', { emoji: '👀', phrases: ['yes please', 'yes'], keys: [['yes']] }),
+        opt('no', 'No, thank you.', 'いいえ、けっこうです。', { phrases: ['no thank you', 'no'], keys: [['no']] }),
+      ]);
+      if (again.id === 'no') return;
+    }
     await c.ask([opt('price', 'How much is it?', 'いくらですか？', { phrases: ['how much is it', 'how much'], keys: [['much', 'price']], area: 'shopping', expr: 'shop.price', template: 'How much is it?' })]);
     await c.say(who, line(`It's ${item.price} yen.`, `${item.price}円です。`, { area: 'shopping', expr: 'shop.yen', template: "It's ___ yen." }));
     const buy = await c.ask([opt('buy', "I'll take it!", 'これをください！', { emoji: '🛍️', phrases: ["i'll take it", 'i will take it'], keys: [['take', 'buy']], area: 'shopping', expr: 'shop.buy', template: "I'll take it!" }), opt('no', 'No, thank you.', 'いいえ、けっこうです。', { phrases: ['no thank you'], keys: [['no']] })]);
     if (buy.id === 'no') return;
+    faultPoint('purchase:item');
     const result = buyMallItem(w.save, item.id);
+    if (!result.ok && result.reason === 'owned') {
+      await c.say(who, line('You have one already!', 'もう持っているね！', { area: 'possessions', expr: 'a.havealready', template: 'You have one already!' }));
+      await c.ask([opt('ok', 'Oh, OK! Thank you!', 'そっか！ありがとう！', { phrases: ['ok', 'thank you'], keys: [['ok', 'thank']] })]);
+      return;
+    }
     if (!result.ok) {
       await c.say(who, line('You need more pocket money. You can look again next week!', 'おこづかいが足りないね。また来週、見に来てね！'));
       await c.ask([opt('next', "OK! I'll come again!", 'はい！また来ます！', { phrases: ['ok', 'come again'], keys: [['ok', 'again']] })]);
@@ -84,7 +102,7 @@ const eatCard = () => opt('eat', "Let's eat!", '食べよう！', { phrases: ["l
 
 // Only the hand-over mutates the wallet. An interrupted order always resumes
 // the saved receipt, including when it is brought along on a group outing.
-async function playerOrder(game, c, menu, visit, { carry = false } = {}) {
+async function playerOrder(game, c, menu, visit, { carry = false, mealId: fixedMealId = null } = {}) {
   const save = game.world.save;
   let meal = pendingMallMeal(save), food, who;
   if (meal) {
@@ -101,7 +119,14 @@ async function playerOrder(game, c, menu, visit, { carry = false } = {}) {
     await c.say(who, line(`What do you want to eat? You have ${pocketMoney(save)} yen.`, `何を食べたい？おこづかいは${pocketMoney(save)}円です。`, { area: 'wantto', expr: 'q.wanteat', template: 'What do you want to eat?' }));
     const pick = await c.ask([...menu, extras.find((f) => f.id === 'water')].map(foodCard), { columns: 2 });
     food = allFood.find((f) => f.id === pick.id);
-    const mealId = makeId('mall-meal');
+    const mealId = fixedMealId || makeId('mall-meal');
+    // A replayed outing already paid for this slot's meal: serve it for free.
+    meal = fixedMealId ? servePaidMallMeal(save, food.id, mealId) : null;
+    if (meal) {
+      who = visit(food);
+      await c.say(who, line('You paid already! Here is your food.', 'もうはらってあるよ！はい、どうぞ。', { area: 'shopping' }));
+      game.save(true);
+    }
     while (!meal) {
       who = visit(food);
       const question = await c.ask([orderCard(food), priceCard()]);
@@ -110,6 +135,7 @@ async function playerOrder(game, c, menu, visit, { carry = false } = {}) {
         await c.say(who, line(`It's ${price} yen. You have ${balance} yen.`, `${price}円です。おこづかいは${balance}円です。`));
         await c.ask([orderCard(food)]);
       }
+      faultPoint('purchase:food');
       const result = buyMallFood(save, food.id, mealId);
       if (result.ok) { meal = result.meal; game.save(true); break; }
       await c.say(who, line(`You don't have enough money for this yet. You have ${result.balance} yen. Please choose something cheaper, or free water!`, `今はおこづかいが足りないね。${result.balance}円あるよ。安いものか、無料の水をえらんでね！`));
@@ -205,10 +231,13 @@ async function shopOuting(game, c, actors) {
     if (pick.id === 'toys') {
       // Possessions practice on the way in.
       await c.say(main, line('Do you have a board game?', 'ボードゲームを持ってる？', { area: 'possessions', expr: 'q.have', template: 'Do you have ___?' }));
-      await c.ask([
-        opt('yes', 'Yes, I do.', 'うん、持ってるよ。', { emoji: '🙋', phrases: ['yes i do', 'yes'], keys: [['yes']], area: 'possessions', expr: 'a.yesido', template: 'Yes, I do.' }),
-        opt('no', "No, I don't.", 'ううん、持ってない。', { emoji: '🙅', phrases: ["no i don't", 'no'], keys: [['no']], area: 'possessions', expr: 'a.noidont', template: "No, I don't." }),
-      ]);
+      // Only the true answer is offered: the game never lets the save and the
+      // conversation disagree (DESIGN_DECISIONS 2026-11-23).
+      const has = ownsMallItem(game.world.save, 'board_game');
+      await c.ask([has
+        ? opt('yes', 'Yes, I do.', 'うん、持ってるよ。', { emoji: '🙋', phrases: ['yes i do', 'yes', 'i have a board game'], keys: [['yes', 'have']], area: 'possessions', expr: 'a.yesido', template: 'Yes, I do.' })
+        : opt('no', "No, I don't.", 'ううん、持ってない。', { emoji: '🙅', phrases: ["no i don't", 'no', "i don't have a board game"], keys: [['no', 'dont', "don't"]], area: 'possessions', expr: 'a.noidont', template: "No, I don't." })]);
+      await c.say(main, has ? line("Cool! Let's play it at your house sometime!", 'いいね！今度あなたの家であそぼう！', { area: 'wantto' }) : line("Let's look at the board games!", 'ボードゲームを見てみよう！'), { expr: 'happy' });
     }
     const target = game.scene.interact.find((it) => it.kind === 'mallShop' && it.shop === pick.id);
     game.dialogue.close();
@@ -258,7 +287,7 @@ async function mealOuting(game, c, actors) {
     actors.forEach((a, i) => { a.char.setBase('idle'); a.char.setPosition(-5.5 + i * 0.8, 2.6); });
     counterCamera(game, { x: -6.5, z: 1.7 });
     await c.say(main, line('We each pay for our own food. What do you want to eat?', '食べものは一人ずつ自分で払うよ。何を食べたい？', { area: 'wantto', expr: 'q.wanteat', template: 'What do you want to eat?' }));
-    const mine = await playerOrder(game, c, [extras[0], foodById('hamburger'), extras[1], extras[2], foodById('icecream'), foodById('riceball')], visitCounter);
+    const mine = await playerOrder(game, c, [extras[0], foodById('hamburger'), extras[1], extras[2], foodById('icecream'), foodById('riceball')], visitCounter, { mealId: outingMealId(w.save) });
     const orders = [mine];
     for (const a of actors) {
       const fav = foodById(a.npc.food);

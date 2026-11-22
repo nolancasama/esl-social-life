@@ -23,7 +23,8 @@ export class Input {
       if (!e.repeat) this.emit('key', e);
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
-    window.addEventListener('blur', () => this.keys.clear());
+    window.addEventListener('blur', () => this.release());
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.release(); });
 
     // Joystick (always available on touch devices; also usable with a mouse)
     this.joyBase = el('div', { class: 'joy', hidden: !this.touchUI }, [el('div', { class: 'joy-knob' })]);
@@ -38,8 +39,10 @@ export class Input {
     });
     this.joyBase.addEventListener('pointermove', (e) => { if (this.joy.active && e.pointerId === this.joy.id) this._joyMove(e, R, setKnob); });
     const end = () => { this.joy.active = false; this.joy.x = 0; this.joy.y = 0; setKnob(0, 0); };
-    this.joyBase.addEventListener('pointerup', end);
-    this.joyBase.addEventListener('pointercancel', end);
+    this._joyEnd = end;
+    // Releasing, cancelling or losing the pointer always stops the player.
+    for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) this.joyBase.addEventListener(ev, end);
+    this.joyBase.addEventListener('contextmenu', (e) => e.preventDefault());
 
     // Canvas: tap/click to move or talk, drag to rotate the camera.
     let down = null;
@@ -58,6 +61,7 @@ export class Input {
       if (!down.moved && performance.now() - down.t < 450) this.emit('tap', { x: e.clientX, y: e.clientY });
       down = null;
     });
+    canvas.addEventListener('pointercancel', () => { down = null; });
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
@@ -72,7 +76,10 @@ export class Input {
     this.joy.y = -dy / R;
   }
 
-  showJoystick(on) { this.joyBase.hidden = !on || !this.touchUI; }
+  showJoystick(on) { this.joyBase.hidden = !on || !this.touchUI; if (this.joyBase.hidden) this._joyEnd?.(); }
+
+  /** Drop every held key and the joystick (blur, hidden tab, scene changes). */
+  release() { this.keys.clear(); this._joyEnd?.(); }
 
   /** Movement axis: x = right, y = forward, magnitude ≤ 1. */
   axis() {

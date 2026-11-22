@@ -27,6 +27,150 @@ A useful rule:
 
 ---
 
+## 2026-11-23 — Living World & Meaningful Possessions: review of the brief
+
+The user's five-phase brief (reliability, usable possessions, deeper shared
+activities, English with consequences, integration) was reviewed against the
+code on `9c7570d`. Built on branch `living-world` in this order, one commit
+per phase, each phase verified before the next. Decisions below are frozen
+for the workers; later phase notes append under this heading.
+
+**Confirmed in code before deciding**
+- `Activities.run()` catches an exception and sets `error: true`, but only
+  `friend_house` checks it. Every other failed activity still awards XP,
+  creates a memory and souvenir, completes the plan and advances time.
+- All nine Niji Mall items are unique souvenirs (`mall_*`), and `buyMallItem`
+  charges again for an item the player already owns. `addSouvenir` then
+  silently skips the duplicate, so the money is lost for nothing.
+- The crane friend already calls cues from the real target position. The
+  racing rival is a fixed seeded finishing time (`raceGhostTime`) drawn as a
+  ghost car. Rhythm has no friend part.
+- The home visit asks "How many games do you have?" with fixed answer cards
+  (2/5/10/none) that ignore what the player owns.
+
+**Phase 1 — reliability (accepted, with modifications)**
+- An activity result carries `status: 'completed' | 'failed' | 'cancelled'`.
+  `Activities.run()` grants rewards only on `completed`: XP, memory, souvenir,
+  photo, thanks message, plan completion, stats, first-day flag and time. A
+  `play()` that resolves without a status counts as completed, so existing
+  activities keep working; a thrown error is `failed`.
+- Failure path (shared, every activity): end the active event but keep its
+  instance and the plan pending so the player can retry; restore player/NPC
+  props, base animations, sitting, camera, HUD, `activityHud`,
+  `activityTick/Move`, `extraInteract`, sparkles; run per-activity cleanup;
+  return to explore mode with a bilingual "Something went wrong. Let's try
+  again later!" toast; no time advance. `friend_house` keeps returning to its
+  door.
+- Cleanup registry: activities register disposers (temporary meshes, DOM
+  controls, listeners) on the game; the framework always runs them, on
+  success or failure. Activities are not rewritten wholesale.
+- Rewards and the time advance are saved together. No autosave may persist a
+  reward without its time advance (generalising the `friend_house` rule), so
+  a reload replays the activity instead of keeping a free reward.
+- Purchases: unique items already owned show "You have one already!" with a
+  free cancel; no charge. Mall meals keep the pending-meal receipt. Each
+  arcade prize stays won once.
+- Controls: every hold button releases on pointerup, pointercancel,
+  pointerleave, lostpointercapture and window blur, and has a keyboard
+  equivalent. No activity needs a held mouse button. *Modified:* the game has
+  no pause feature, so "pausing during dialogue" means opening the phone or
+  menus during dialogue or an activity must not break state. No pause system
+  is added.
+- Fault injection for tests is a dev-only hook (`window.__esl.fault`, never
+  in production builds). It throws at a named point: activity play, food
+  purchase, arcade play, scene transition, multi-NPC activity.
+
+**Phase 2 — possessions (accepted, with modifications)**
+- Ownership stays the existing souvenir list (`mall_*` kinds); no second
+  inventory. Per-item state lives in `save.things` (worn items, placement,
+  saved artwork, which NPCs have noticed what), added by an idempotent
+  migration that keeps every existing profile.
+- **My Things**, from the phone and from the bedroom shelf: one card per owned
+  item, with only the actions that item has (Play / Read / Wear / Take off /
+  Draw / Show a friend). Show a friend appears only while a friend is with
+  the player. With nothing owned it suggests Niji Mall. No quantities, no
+  grid inventory.
+- Items:
+  - **Ball:** with the ball owned, the park has a free solo kick-up timing
+    game. Soccer fans in the park may suggest "Do you want to play soccer?",
+    which leads to the existing soccer activity. Soccer stays available
+    without the ball.
+  - **Board game = "Picture Pairs":** a 12-card memory game (6 picture pairs
+    with English words), turn-taking with a friend at home, or solo. The NPC
+    flips cards visibly, says the word, and has a seeded, imperfect memory.
+    This was chosen over a dice/path game because memory and turn-taking give
+    real decisions and vocabulary without rules to explain.
+  - **Robot:** stands in the bedroom. Play gives "Go straight! / Turn left! /
+    Turn right! / Stop!" command cards (speech or tap); the robot moves on a
+    small floor grid to reach a star. A visiting friend can ask "Can I play
+    with your robot?" and set the target.
+  - **Book / comic:** a four-page picture story overlay with one short
+    sentence per page, Japanese hints and read-aloud. A reading fan visiting
+    can comment ("Do you like comics?").
+  - **Colored pencils:** reuse the hobby drawing canvas. Keep the latest few
+    drawings in the existing photo store; the newest hangs on the bedroom
+    wall and can be shown to a friend.
+  - **Cap / T-shirt:** wear and take off at the bedroom mirror or in My
+    Things, through the existing look fields (`accessory: 'cap'`, top). The
+    original look is restored on take off. Persists across saves and scenes.
+  - **Kendama:** a short timing game (ball on a swinging arc, tap over the
+    cup, three tricks). Solo, or taking turns with a friend.
+- NPCs notice only what the save really holds (owned, worn, displayed),
+  filtered by their interests, at most one possession comment per NPC per day
+  and once per item per NPC. "Do you have a ___?" and "How many games do you
+  have?" answer cards come from real data: only true answer cards are
+  offered, with equivalent phrasings. NPC answers come from generated NPC
+  data. Owning the thing can lead straight to an invitation.
+- Spending stays optional; all core English stays free.
+
+**Phase 3 — shared activities (accepted, crane reduced)**
+- **Racing:** the ghost time becomes a seeded, lightweight simulated car on
+  the same track: it follows the centre line with steering lag, accelerates
+  to a skill-based top speed and makes occasional seeded small mistakes. Its
+  progress is drawn live and the friend reacts to the result. Skill varies
+  slightly with interests (a games fan is a little faster). The car is
+  beatable by tuning, and unit tests on a seeded simulation keep it so: a
+  clean simulated player must beat every NPC.
+- **Rhythm:** with a friend, sections alternate (the player, then the
+  friend). The friend's hits animate on the screen, their character gestures
+  on the beat, and accuracy depends on interests (music fans play better).
+  The team score is shared, and the lines are encouraging. Solo play is
+  unchanged.
+- **Crane:** *reduced.* Correct target-based cues already exist. Add only the
+  friend's pointing gesture and "Come forward! / Go back!" wording where it
+  is missing.
+- **Home visits:** "What do you want to play?" offers the player's real
+  things plus the existing racing and photo choices. The friend's
+  interest-based preference is spoken first ("I want to play a board
+  game!"), and the student's choice decides the activity. Different visitors
+  prefer different things.
+- **Memories:** a completed shared activity records participants, activity,
+  item, place, cooperation and a notable result in the memory `detail`.
+  Recall lines use these facts with several templates, inside the existing
+  memory-reference rate limits.
+- **XP:** XP comes only from the shared experience (one event or outing).
+  Replays inside the same visit or machine add none, and "Play again?" skips
+  the intro dialogue. Losing never costs friendship.
+
+**Phase 4 — English with consequences (accepted, one item rejected)**
+- Directions grammar drives the robot and the crane, and the existing
+  directions visitor stays. *Rejected:* a separate partner-navigation
+  activity. The robot, crane and directions visitor already cover "Go
+  straight / Turn left / Stop", and another activity would be scope creep.
+- "What do you want to play / do / eat?": the choice always decides the very
+  next activity (board game → board game).
+- Abilities are visible: interests that change NPC skill (racing, rhythm,
+  kendama) match the adjectives used about them ("She is good at music").
+- Repetition: when equivalent questions exist, prefer the one the student has
+  practised least (existing practice history). No mastery gates, no grades.
+- Hybrid input stays as it is: speech optional, cards always work, mic
+  failures never penalised, no recordings stored or sent.
+
+**Phase 5 — integration**
+- One new e2e script (`e2e:living`) plays scenarios A–D through real
+  interactions. Debug hooks may only set up state (money, day, level).
+  Existing suites, perf and 1366×768 screenshots are rerun before deploy.
+
 ## 2026-11-22 — Niji Mall three floors: review of the expansion brief
 
 The user's brief (three floors, solo eating, food prices, arcade, flexible

@@ -18,9 +18,12 @@ import { wait } from '../core/util.js';
 import { bus } from '../core/events.js';
 import { guideVisitor } from './directions.js';
 import { playMilestone } from './milestone.js';
-import { startEvent, completeEvent, offerEvent, endEvent } from '../world/friendship.js';
+import { startEvent, completeEvent, offerEvent } from '../world/friendship.js';
 import { eventTitle, FLOWS } from '../dialogue/events.js';
 import { makeId } from '../core/util.js';
+import { faultPoint } from '../core/fault.js';
+import { activityOutcome, rewardable, COMPLETED, CANCELLED, FAILED } from './outcome.js';
+import { recoverGame, runActivityCleanup } from './recovery.js';
 
 // Shelf souvenirs for friendship events (engine/food.js draws them).
 const EVENT_SOUVENIR = { special_day: 'party', best_friend: 'keepsake', practice: 'medal', project: 'card', home_visit: 'visit', friend_house: 'visit' };
@@ -85,40 +88,50 @@ export class Activities {
   async run(act, actors, { plan = null, like = null, event = null, variant = null, play = null } = {}) {
     const game = this.game;
     const w = game.world;
-    if (event?.template === 'friend_house' && event.status !== 'scheduled') return;
+    if (event?.template === 'friend_house' && event.status !== 'scheduled') return { status: CANCELLED };
+    if (this.running) return { status: CANCELLED };
+    this.running = true;
+    try { return await this._run(act, actors, { plan, like, event, variant, play }); }
+    finally { this.running = false; game.saveHold = false; }
+  }
+
+  async _run(act, actors, { plan, like, event, variant, play }) {
+    const game = this.game;
+    const w = game.world;
     game.setMode('activity');
     game.hud.setActivity(true);
     if (event) startEvent(w.save, event.id);
-    let result = null;
+    let raw = null, error = null;
     try {
-      if (play) result = await play(game, actors);
-      else if (act === 'cafe') result = await playCafe(game, actors, { plan, celebrate: variant?.celebrate || null });
-      else if (act === 'mall') result = await playMall(game, actors);
-      else result = await playBall(game, actors, { soccer: act === 'soccer', like });
+      faultPoint(actors.length > 1 ? 'activity:group' : 'activity:play');
+      if (play) raw = await play(game, actors);
+      else if (act === 'cafe') raw = await playCafe(game, actors, { plan, celebrate: variant?.celebrate || null });
+      else if (act === 'mall') raw = await playMall(game, actors, { plan });
+      else raw = await playBall(game, actors, { soccer: act === 'soccer', like });
     } catch (err) {
       console.error('[activity] failed', err);
-      result = { score: 0, detail: {}, error: true };
+      error = err;
     }
-    actors = result?.actors || actors;
+    const result = activityOutcome(raw, error);
+    actors = result.actors || actors;
     game.dialogue.close();
     game.activityHud.hide();
     game.activityTick = null;
     game.activityMove = null;
-    if (event?.template === 'friend_house' && result?.error) {
-      endEvent(w.save, event.id);
-      game.player.char.setProp(null);
-      game.player.char.setBase('idle');
-      game.sitting = false;
-      game.hud.setActivity(false);
-      await game.enterScene('town', 'friendHouseDoor');
-      game.setMode('explore');
+    runActivityCleanup(game);
+    if (!rewardable(result)) {
+      // Failed or cancelled: no XP, memory, souvenir, photo, thanks, plan
+      // completion or time. The event instance and plan stay for a retry.
+      recoverGame(game, { actors, event, toast: result.status === FAILED });
+      if (event?.template === 'friend_house') { await game.enterScene('town', 'friendHouseDoor'); game.setMode('explore'); }
       game.save(true);
-      return;
+      return { status: result.status };
     }
-    // The door/scene transition saved the unfinished plan. Keep that snapshot
-    // until the result card is dismissed and advanceTime saves reward + time
-    // together. A reload on the result card can replay, never keep free XP.
-    if (event?.template === 'friend_house') clearTimeout(game.saveTimer);
+    // The last save before this point holds the unfinished plan. Hold saves
+    // until advanceTime saves reward + time together: a reload on the result
+    // card replays the activity and can never keep a free reward.
+    clearTimeout(game.saveTimer);
+    game.saveHold = true;
     // Rewards: connection, memory, souvenir, thank-you message.
     const ids = actors.map((a) => a.npc.id);
     const before = Object.fromEntries(ids.map((id) => [id, w.level(id)]));
@@ -131,7 +144,7 @@ export class Activities {
       const r = completeEvent(w, event.id, { act: ACT_NAMES[act] ? act : null, detail: result.detail || {}, photo: result.photo, phrase: result.phrase || null, remembered: !!result.remembered });
       mem = r.memory || { id: makeId('mem') };
       souvenir = w.addSouvenir(eventSouvenir(event, act, result), ids[0]);
-      if (!r.already) FLOWS[event.template]?.after?.(game, event, result);
+      if (!r.already) { try { FLOWS[event.template]?.after?.(game, event, result); } catch (err) { console.error('[activity] after', err); } }
     } else if (ids.length >= 2) {
       // Group outing: XP for every friend and closer friends, but no level gate
       // (only one-on-one time opens levels; DESIGN_DECISIONS 2026-11-16).
@@ -152,16 +165,25 @@ export class Activities {
       for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) w.connect(ids[i], ids[j], 2);
       souvenir = w.addSouvenir(act, ids[0]);
     }
-    if (result.photo) addPhoto(w.save.id, { id: mem.id, url: result.photo, day: w.day, act, npcIds: ids, caption: info.en, phrase: result.phrase || '' });
+    // The photo store is separate from the save: write it with the save that
+    // commits the reward, so a reload can never leave an orphan photo.
+    const day = w.day;
+    const commit = () => {
+      if (result.photo) addPhoto(w.save.id, { id: mem.id, url: result.photo, day, act, npcIds: ids, caption: info.en, phrase: result.phrase || '' });
+      try { result.onCommit?.(); } catch (err) { console.error('[activity] commit', err); }
+    };
     w.queueEvening({ type: 'thanks', from: ids[0], en: info.thanks[0], ja: info.thanks[1] });
     if (plan) w.completePlan(plan);
     w.save.stats.activities = (w.save.stats.activities || 0) + 1;
     if (w.save.flags.fd === 'planned' && ids.includes(w.save.introNpc)) { w.save.flags.fd = 'played'; bus.emit('firstday', { stage: 'played' }); }
     game.hud.setActivity(false);
-    await game.hud.results({ act, title: info, npcs: actors.map((a) => a.npc), before, result, souvenir, photo: result.photo });
+    try {
+      await game.hud.results({ act, title: info, npcs: actors.map((a) => a.npc), before, result, souvenir, photo: result.photo });
+    } catch (err) { console.error('[activity] results', err); }
     game.npcs.restoreArea();
-    await game.advanceTime({ reason: 'activity' });
+    await game.advanceTime({ reason: 'activity', beforeSave: commit });
     if (event?.template === 'friend_house') await game.enterScene('town', 'friendHouseDoor');
+    return { status: COMPLETED, memoryId: mem?.id || null };
   }
 
   // ------------------------------------------------------------ lost item search (no time cost)

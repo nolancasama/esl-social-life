@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { Conversation, opt } from '../dialogue/runner.js';
 import { line } from '../dialogue/lines.js';
 import { sfx } from '../core/audio.js';
+import { faultPoint } from '../core/fault.js';
 import { until } from './ballplay.js';
 import { rhythm } from './hobby.js';
 import { ArcadeScreen } from '../ui/arcadescreen.js';
@@ -171,6 +172,7 @@ function raceLoop(game, { rivalName, ghost, navigator }) {
   };
   setState({ phase: 'playing', ghostTime: ghost });
   return until(game, (dt) => {
+    faultPoint('arcade:tick');
     if (count > 0) {
       count -= dt;
       if (count <= 0) { sfx.select(); hud.pop('GO!', 'good'); }
@@ -260,6 +262,7 @@ function craneLoop(game, target, helper) {
   };
   setState({ phase: 'playing', target: target.id, tries });
   return until(game, (dt) => {
+    faultPoint('arcade:tick');
     t += dt;
     if (phase === 'move') {
       claw = moveClaw(claw, screen.axis(), dt);

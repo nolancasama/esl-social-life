@@ -4,7 +4,12 @@ import { el } from '../core/util.js';
 
 const KEYS = { ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right', ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down' };
 
+const OPEN = new Set();
+
 export class ArcadeScreen {
+  /** Close every open screen (activity recovery after an error). */
+  static closeAll() { for (const s of [...OPEN]) s.close(); }
+
   /** dirs: which of left/right/up/down to show; actions: [{ id, label, tone }] */
   constructor(root, { width = 640, height = 400, dirs = ['left', 'right'], actions = [], color = '#7B6DC7' } = {}) {
     this.held = { left: false, right: false, up: false, down: false };
@@ -18,14 +23,18 @@ export class ArcadeScreen {
       const on = (e) => { e.preventDefault(); this.held[d] = true; b.classList.add('on'); };
       const off = () => { this.held[d] = false; b.classList.remove('on'); };
       b.addEventListener('pointerdown', on);
-      for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, off);
+      // A finger or touchpad press that slides off, is cancelled, or loses
+      // capture always releases; long-press never opens a context menu.
+      for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, off);
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
       pad.appendChild(b);
     }
     this.actionButtons = {};
     const acts = el('div', { class: 'arc-acts' });
     for (const a of actions) {
       const b = el('button', { class: `arc-act ${a.tone || ''}` }, [a.label]);
-      b.addEventListener('pointerdown', (e) => { e.preventDefault(); this.pressed.add(a.id); });
+      b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!b.disabled) this.pressed.add(a.id); });
+      b.addEventListener('contextmenu', (e) => e.preventDefault());
       acts.appendChild(b);
       this.actionButtons[a.id] = b;
     }
@@ -38,10 +47,12 @@ export class ArcadeScreen {
       else if ((e.code === 'Space' || e.code === 'Enter') && this.firstAction) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) this.pressed.add(this.firstAction); }
     };
     this._up = (e) => { const d = KEYS[e.code]; if (d) this.held[d] = false; };
-    this._blur = () => { for (const d of Object.keys(this.held)) this.held[d] = false; };
+    this._blur = () => { for (const d of Object.keys(this.held)) this.held[d] = false; this.root.querySelectorAll('.arc-dir.on').forEach((b) => b.classList.remove('on')); };
     window.addEventListener('keydown', this._down, true);
     window.addEventListener('keyup', this._up, true);
     window.addEventListener('blur', this._blur);
+    document.addEventListener('visibilitychange', this._blur);
+    OPEN.add(this);
   }
 
   /** Horizontal / vertical input in -1..1 (up is -1). */
@@ -59,6 +70,9 @@ export class ArcadeScreen {
   }
 
   close() {
+    if (!OPEN.has(this)) return;
+    OPEN.delete(this);
+    document.removeEventListener('visibilitychange', this._blur);
     window.removeEventListener('keydown', this._down, true);
     window.removeEventListener('keyup', this._up, true);
     window.removeEventListener('blur', this._blur);

@@ -41,6 +41,8 @@ import { migrateSave } from '../world/migrate.js';
 import { recoverInterrupted, snapshot, offerEvent, completeEvent, instance, npcFree } from '../world/friendship.js';
 import { runEvent, eventTitle } from '../dialogue/events.js';
 import { confirmTime } from '../dialogue/common.js';
+import { armFault, faultPoint } from '../core/fault.js';
+import { recoverGame } from '../activities/recovery.js';
 
 const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, mall2: buildMall2, mall3: buildMall3, home: buildHome, friendhouse: buildFriendHouse, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom };
 const MALL_FLOORS = ['mall', 'mall2', 'mall3'];
@@ -119,6 +121,9 @@ export class Game {
 
   save(now = false) {
     clearTimeout(this.saveTimer);
+    // Between a completed activity's rewards and its time advance nothing is
+    // written; advanceTime commits both together (DESIGN_DECISIONS 2026-11-23).
+    if (this.saveHold) return;
     const doSave = () => {
       const s = this.world.save;
       s.settings = { ...this.settings };
@@ -133,6 +138,12 @@ export class Game {
   get music() { return musicSnapshot(); }
   get mallMeal() { return mallMealSnapshot(this); }
   get arcade() { return arcadeSnapshot(); }
+  /** Dev-only fault injection for recovery tests; a no-op in production builds. */
+  fault(name) { return armFault(name); }
+  /** Read-only reliability state for tests. */
+  get reliability() {
+    return Object.freeze({ mode: this.mode, activityRunning: !!this.activities.running, saveHold: !!this.saveHold, tick: !!this.activityTick, fade: this.fadeEl.classList.contains('on'), lastRecovery: this.lastRecovery || null, sceneId: this.sceneId, tempUi: this.uiRoot.querySelectorAll('.act-temp, .sketch, .arc, .mall-meal-skip').length, hudActivity: !this.activityHud.root.hidden });
+  }
 
   portrait(npc) { return this.portraitFn(npc.look, npc.id + ':' + (npc.lookSeed || 0)); }
   playerPortrait() { return this.portraitFn(this.world.save.player.look, 'player:' + JSON.stringify(this.world.save.player.look).length + this.world.save.player.look.hairStyle + this.world.save.player.look.topColor); }
@@ -177,16 +188,40 @@ export class Game {
 
   async fade(fn, ms = 260) {
     this.fadeEl.classList.add('on');
-    await wait(ms);
-    await fn?.();
-    await wait(60);
-    this.fadeEl.classList.remove('on');
+    try {
+      await wait(ms);
+      await fn?.();
+      await wait(60);
+    } finally {
+      this.fadeEl.classList.remove('on');
+    }
     await wait(ms * 0.6);
   }
 
-  async enterScene(id, spawnId, { fade = true, banner = true, companions = [] } = {}) {
+  /**
+   * Change scene. If building or entering the scene fails, the player goes
+   * back to the scene they came from (or home), the game is made usable again,
+   * and the error is rethrown so an activity in progress counts as failed.
+   */
+  async enterScene(id, spawnId, opts = {}) {
+    const prev = this.sceneId;
+    try {
+      await this._enterScene(id, spawnId, opts);
+    } catch (err) {
+      console.error('[scene] failed to enter', id, err);
+      this.fadeEl.classList.remove('on');
+      const back = prev && prev !== id && this.scenes[prev] ? prev : (id === 'home' ? 'town' : 'home');
+      const doorBack = { mall: 'mallDoor', cafe: 'cafeDoor', home: 'homeDoor', friendhouse: 'friendHouseDoor', classroom: 'schoolGate' }[id];
+      const spawn = back === 'town' ? (doorBack || 'crossroads') : back === 'home' ? 'center' : undefined;
+      try { await this._enterScene(back, spawn, { fade: false, banner: true }); } catch (err2) { console.error('[scene] fallback failed', err2); }
+      throw err;
+    }
+  }
+
+  async _enterScene(id, spawnId, { fade = true, banner = true, companions = [] } = {}) {
     const go = async () => {
       if (this.scene) this.npcs.clear({ preserve: companions });
+      faultPoint('scene:enter');
       const scene = this.getScene(id);
       this.scene = scene;
       this.sceneId = id;
@@ -534,12 +569,22 @@ export class Game {
   async talkTo(actor) {
     if (this.mode !== 'explore' || !actor) return;
     this.hud.prompt(null);
-    try { await talkToNpc(this, actor); } catch (err) { console.error('[talk]', err); this.dialogue.close(); this.camera.release(); this.setMode('explore'); }
+    try { await talkToNpc(this, actor); } catch (err) { console.error('[talk]', err); recoverGame(this, { actors: [actor] }); }
     this.hud.refresh();
     this.save();
   }
 
+  /** Every object interaction is guarded: an error never leaves the game stuck. */
   async useInteract(it) {
+    try { return await this._useInteract(it); }
+    catch (err) {
+      console.error('[interact]', it?.kind, err);
+      recoverGame(this, { actors: this.npcs.actors.filter((a) => a.engaged && !a.special) });
+      this.save(true);
+    }
+  }
+
+  async _useInteract(it) {
     const w = this.world;
     sfx.click();
     switch (it.kind) {
@@ -709,14 +754,27 @@ export class Game {
   }
 
   // ------------------------------------------------------------ time
-  async advanceTime({ reason = 'skip', subjects = null } = {}) {
+  async advanceTime({ reason = 'skip', subjects = null, beforeSave = null } = {}) {
     const w = this.world;
     this.setMode('transition');
     this.hud.setGoal(null);
-    if (w.period === EVENING) return this.sleep();
+    // An activity's held reward is committed with this time advance.
+    this.saveHold = false;
+    if (w.period === EVENING) return this.sleep({ beforeSave });
     const wasSchool = w.schoolTime;
     w.advance();
+    beforeSave?.();
     this.save(true);
+    try {
+      await this._afterAdvance(wasSchool, subjects);
+    } catch (err) {
+      console.error('[time] scene after advance failed', err);
+      recoverGame(this, { toast: false });
+    }
+  }
+
+  async _afterAdvance(wasSchool, subjects) {
+    const w = this.world;
     if (wasSchool) {
       const list = (subjects || TIMETABLE[(w.dow)].map((s) => SUBJECTS.find((x) => x.id === s)));
       for (const s of list) w.logLine({ expr: 'subj:' + s.id, area: 'subjects', en: s.en, template: s.en }, 'heard');
@@ -739,12 +797,14 @@ export class Game {
     this.hud.pump();
   }
 
-  async sleep() {
+  async sleep({ beforeSave = null } = {}) {
     const w = this.world;
     this.setMode('transition');
+    this.saveHold = false;
     if (w.save.flags.fd === 'played') w.save.flags.fd = 'slept';
     await this.hud.transition({ icon: '🌙', title: 'Good night...', sub: '💤', ja: 'おやすみなさい…', ms: 1500 });
     w.sleep();
+    beforeSave?.();
     this.save(true);
     await this.wakeUp();
   }

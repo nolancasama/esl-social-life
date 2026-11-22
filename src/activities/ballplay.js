@@ -11,9 +11,23 @@ import { makeBlobShadow } from '../engine/materials.js';
 import { sfx } from '../core/audio.js';
 import { wait } from '../core/util.js';
 
+// A tick that throws rejects the activity instead of hanging it: the main loop
+// would otherwise log the error every frame and the promise never settles.
+// Recovery (activities/recovery.js) can also abort a pending tick.
 export function until(game, fn) {
-  return new Promise((resolve) => {
-    game.activityTick = (dt) => { if (fn(dt)) { game.activityTick = null; resolve(); } };
+  return new Promise((resolve, reject) => {
+    const tick = (dt) => {
+      let done;
+      try { done = fn(dt); } catch (err) {
+        if (game.activityTick === tick) game.activityTick = null;
+        game.activityAbort = null;
+        reject(err);
+        return;
+      }
+      if (done) { if (game.activityTick === tick) game.activityTick = null; game.activityAbort = null; resolve(); }
+    };
+    game.activityTick = tick;
+    game.activityAbort = (err) => { if (game.activityTick === tick) game.activityTick = null; game.activityAbort = null; reject(err); };
   });
 }
 

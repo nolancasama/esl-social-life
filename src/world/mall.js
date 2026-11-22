@@ -56,6 +56,22 @@ export function buyMallFood(save, foodId, mealId) {
   return { ok: true, meal: save.mallMeal, balance: save.pocketMoney.balance, charged: true, resumed: false };
 }
 
+/**
+ * A replayed outing (reload before its reward was saved) reuses the same
+ * meal id. Its receipt proves it was paid: serve the food again for free.
+ */
+export function servePaidMallMeal(save, foodId, mealId) {
+  if (mallFoodPrice(foodId) === null || typeof mealId !== 'string' || !mealId) return null;
+  if (!save.mallMealReceipts?.includes(mealId)) return null;
+  const pending = pendingMallMeal(save);
+  if (pending) return pending.id === mealId ? pending : null;
+  save.mallMeal = { id: mealId, foodId, bites: MALL_MEAL_BITES };
+  return save.mallMeal;
+}
+
+/** One shared meal per outing slot, so a replay of the same outing never pays twice. */
+export const outingMealId = (save) => `outing-meal:${whole(save.time?.day)}:${whole(save.time?.period)}`;
+
 /** Keep even an empty portion valid until the presentation finishes the meal. */
 export function biteMallMeal(save, mealId) {
   const meal = pendingMallMeal(save);
@@ -112,11 +128,19 @@ export function pocketMoney(save) {
   return wallet.balance;
 }
 
+/** Every mall item is unique: owning one is having its souvenir. */
+export function ownsMallItem(save, id) {
+  const item = mallItem(id);
+  return !!item && (save.souvenirs || []).some((s) => s.kind === item.souvenir);
+}
+
 /** Deduct only on success; the caller puts the returned item on the shelf. */
 export function buyMallItem(save, id) {
   const balance = pocketMoney(save);
   const item = mallItem(id);
   if (!item) return { ok: false, reason: 'unknown-item', balance };
+  // Never charge for an indistinguishable duplicate (DESIGN_DECISIONS 2026-11-23).
+  if (ownsMallItem(save, id)) return { ok: false, reason: 'owned', item, balance };
   if (balance < item.price) return { ok: false, reason: 'not-enough', item, balance };
   save.pocketMoney.balance -= item.price;
   return { ok: true, item, balance: save.pocketMoney.balance };
