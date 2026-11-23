@@ -636,6 +636,17 @@ export class NpcManager {
     }
     const step = Math.min(d, wk.speed * dt);
     const r = this.scene.collision.resolve(p.x + (dx / d) * step, p.z + (dz / d) * step, 0.28, a);
+    // Pressed against a desk or wall (straight walks have no pathfinding):
+    // stop after a moment and carry on from here instead of walking in place.
+    const moved = Math.hypot(r.x - p.x, r.z - p.z);
+    wk.stuck = step > 0.001 && moved < step * 0.25 ? (wk.stuck || 0) + dt : 0;
+    if (wk.stuck > 0.8) {
+      a.walk = null;
+      c.speed = 0;
+      c.setBase('idle');
+      wk.resolve?.();
+      return;
+    }
     p.x = r.x; p.z = r.z;
     c.turnTo(Math.atan2(dx, dz), 10);
     c.speed = wk.speed;

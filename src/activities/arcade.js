@@ -6,13 +6,18 @@ import { Conversation, opt } from '../dialogue/runner.js';
 import { line } from '../dialogue/lines.js';
 import { sfx } from '../core/audio.js';
 import { faultPoint } from '../core/fault.js';
+import { npcSkill, goodAt } from '../world/things.js';
+import { rngFor } from '../core/rng.js';
+import { wait } from '../core/util.js';
+
+let raceRound = 0;
 import { until } from './ballplay.js';
 import { rhythm } from './hobby.js';
 import { ArcadeScreen } from '../ui/arcadescreen.js';
 import {
   CRANE_PRIZES, CRANE_START, CRANE_TRIES, CRANE_TOLERANCE, cranePrize, moveClaw, craneGrab, craneCue, winCranePrize, hasCranePrize,
-  RACE_FINISH, RACE_STOP_ZONE, RACE_ROAD_HALF, RACE_TRACK, raceCenterAt, raceCueAt, newRace, stepRace, raceGhostTime,
-  rhythmFriendScore,
+  RACE_FINISH, RACE_STOP_ZONE, RACE_ROAD_HALF, RACE_TRACK, raceCenterAt, raceCueAt, newRace, stepRace, newRival, stepRival, finishRival,
+  rhythmGrade,
 } from '../world/arcade.js';
 
 export const ARCADE_GAMES = {
@@ -90,21 +95,31 @@ async function asActivity(game, fn) {
 async function playRacing(game, c, { friends, who }) {
   const rival = friends[0] || null;
   const rivalName = rival ? rival.npc.name : 'Rival car';
-  const ghost = raceGhostTime(rival ? rival.npc.id : 'rival');
+  // A simulated car on the same track; skill from the friend's interests (DESIGN_DECISIONS 2026-11-23).
+  const w = game.world;
+  raceRound++;
+  const rv = newRival(npcSkill(rival?.npc || null, 'racing'), `${rival?.npc.id || 'rival'}|${w.day}|${w.period}|${raceRound}`);
   if (rival) await c.say(rival, line("Let's play together! Let's race!", 'いっしょにあそぼう！レースしよう！'), { gesture: 'happy', expr: 'happy' });
   await c.say(who, line('Go straight, turn left and turn right. Stop at the finish line!', 'まっすぐ行って、左と右に曲がってね。ゴールでとまってね！', { area: 'directions' }));
   await c.ask([opt('go', rival ? "Let's play together!" : "OK! Let's go!", rival ? 'いっしょにあそぼう！' : 'よし！行こう！', { emoji: '🏁', phrases: ["let's play together", "let's go", 'ok'], keys: [['together', 'go', 'ok']], area: 'wantto' })]);
-  const r = await asActivity(game, () => raceLoop(game, { rivalName, ghost, navigator: rival }));
+  const { car: r, rival: done } = await asActivity(game, () => raceLoop(game, { rivalName, rv, navigator: rival }));
+  const theirs = done.s.finishTime;
   const mine = Math.round(r.finishTime);
-  const won = r.finishTime < ghost;
-  setState({ phase: 'result', won, result: { time: r.finishTime, ghost, perfectStop: r.perfectStop } });
+  const won = r.finishTime < theirs;
+  const close = Math.abs(r.finishTime - theirs) < 0.6;
+  setState({ phase: 'result', won, result: { time: r.finishTime, rival: theirs, ghost: theirs, perfectStop: r.perfectStop, rivalMistakes: done.mistakes.length } });
   if (won) sfx.great(); else sfx.good();
-  await c.say(who, line(`${won ? 'You win!' : `${rivalName} wins!`} Your time: ${mine} seconds.${r.perfectStop ? ' Perfect stop!' : ''}`, `${won ? 'あなたの勝ち！' : `${rivalName}の勝ち！`}タイムは${mine}びょう。${r.perfectStop ? 'ぴったりストップ！' : ''}`));
-  if (rival) await c.say(rival, won ? line("You're fast! Good race!", 'はやいね！いいレースだった！') : line('I won! Good race!', 'わたしの勝ち！いいレースだったね！'), { gesture: 'happy', expr: 'happy' });
+  await c.say(who, line(`${won ? 'You win!' : `${rivalName} wins!`} Your time: ${mine} seconds. ${rivalName}: ${Math.round(theirs)} seconds.${r.perfectStop ? ' Perfect stop!' : ''}`, `${won ? 'あなたの勝ち！' : `${rivalName}の勝ち！`}あなたは${mine}びょう、${rivalName}は${Math.round(theirs)}びょう。${r.perfectStop ? 'ぴったりストップ！' : ''}`));
+  if (rival) {
+    const l = close ? (won ? line("That was so close! You're fast! Good race!", 'すごくおしかった！はやいね！いいレースだった！') : line('That was so close! I won! Good race!', 'すごくおしかった！わたしの勝ち！いいレースだったね！'))
+      : won ? line("You're fast! You're good at racing games!", 'はやいね！レースゲームがとくいだね！', { area: 'adjectives', template: "You're good at ___!" }) : line("I won! Let's race again!", 'わたしの勝ち！またレースしよう！');
+    await c.say(rival, l, { gesture: won ? 'clap' : 'cheer', expr: 'happy' });
+    if (!won) await c.ask([opt('goodat', `You're good at racing games, ${rival.npc.name}!`, `${rival.npc.name}、レースゲームがとくいだね！`, { emoji: '🏎️', phrases: ["you're good at racing games", 'good at racing', 'good at games'], keys: [['good', 'racing', 'games']], area: 'adjectives', expr: 'i.goodat', template: "You're good at ___!" })]);
+  }
   return { kind: 'racing', won, score: won ? 3 : 2 };
 }
 
-function raceLoop(game, { rivalName, ghost, navigator }) {
+function raceLoop(game, { rivalName, rv, navigator }) {
   const hud = game.activityHud;
   hud.show(ARCADE_GAMES.racing.title);
   hud.setScore([], 0);
@@ -155,14 +170,20 @@ function raceLoop(game, { rivalName, ghost, navigator }) {
       ctx.fillStyle = '#CFE8F6'; ctx.fillRect(x - 10, y - 12, 20, 10);
       ctx.globalAlpha = 1;
     };
-    const ghostD = s.t > 0 ? Math.min(RACE_FINISH + 6, (s.t / ghost) * RACE_FINISH) : 0;
-    const gy = carY - (ghostD - s.d) * PPM;
-    if (gy > -30 && gy < H + 30) car(W / 2 + (raceCenterAt(ghostD) - camX) * SCALE, gy, '#5C7CFA', 0.7);
+    // The rival drives its own line on the same road.
+    const gy = carY - (rv.s.d - s.d) * PPM;
+    if (gy > -30 && gy < H + 30) car(W / 2 + (rv.s.x - camX) * SCALE, gy, '#5C7CFA');
     car(W / 2 + (s.x - camX) * SCALE, carY, '#E5534B');
-    ctx.fillStyle = 'rgba(30,35,64,0.78)'; ctx.fillRect(10, 10, 230, 58);
+    ctx.fillStyle = 'rgba(30,35,64,0.78)'; ctx.fillRect(10, 10, 250, 58);
     ctx.fillStyle = '#FFF'; ctx.font = '800 20px Nunito, sans-serif'; ctx.textAlign = 'left';
     ctx.fillText(`⏱ ${s.t.toFixed(1)} s`, 22, 30);
-    ctx.fillStyle = '#AFC3FF'; ctx.fillText(`🔵 ${rivalName}`, 22, 54);
+    ctx.fillStyle = '#AFC3FF'; ctx.fillText(`🔵 ${rivalName}${rv.s.d > s.d + 1 ? ' is ahead!' : ''}`, 22, 54);
+    // Progress bar: both cars on the way to the finish.
+    const bx = W - 34, by0 = 24, bh = H - 60;
+    ctx.fillStyle = 'rgba(30,35,64,0.6)'; ctx.fillRect(bx - 6, by0 - 6, 24, bh + 12);
+    ctx.fillStyle = '#FFFFFF'; ctx.fillRect(bx + 4, by0, 4, bh);
+    for (const [d, col] of [[rv.s.d, '#5C7CFA'], [s.d, '#E5534B']]) { const y = by0 + bh * (1 - Math.min(1, d / RACE_FINISH)); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 6, y, 8, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#FFF'; ctx.font = '800 14px Nunito, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🏁', bx + 6, by0 - 12);
     ctx.textAlign = 'center';
     if (count > 0) {
       ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(0, 0, W, H);
@@ -170,13 +191,20 @@ function raceLoop(game, { rivalName, ghost, navigator }) {
       ctx.fillText(count > 1.1 ? '3' : count > 0.55 ? '2' : '1', W / 2, H / 2);
     }
   };
-  setState({ phase: 'playing', ghostTime: ghost });
+  setState({ phase: 'playing', rivalTime: null });
+  let lead = null;
   return until(game, (dt) => {
     faultPoint('arcade:tick');
     if (count > 0) {
       count -= dt;
       if (count <= 0) { sfx.select(); hud.pop('GO!', 'good'); }
     } else {
+      const step = stepRival(rv, dt);
+      rv = step.rv;
+      if (navigator && step.event === 'mistake') navigator.char?.play('surprised', 0.8);
+      const ahead = rv.s.d > s.d + 2 ? 'rival' : s.d > rv.s.d + 2 ? 'me' : lead;
+      if (ahead !== lead && lead !== null && navigator) { navigator.char?.play(ahead === 'rival' ? 'cheer' : 'happy', 0.8); hud.pop(ahead === 'rival' ? `${rivalName} is ahead!` : 'You are ahead!', ahead === 'rival' ? 'wait' : 'good'); }
+      lead = ahead;
       // STOP brakes briefly on the road; after the finish line it holds the car.
       if (screen.take('stop')) { if (s.finishTime !== null) parked = true; else brakeT = 0.8; }
       brakeT = Math.max(0, brakeT - dt);
@@ -185,11 +213,11 @@ function raceLoop(game, { rivalName, ghost, navigator }) {
       if (next.id !== cue) { cue = next.id; hud.say(call, next.en, next.ja); sfx.blip(next.id === 'stop' ? 0.8 : 1.3); }
       if (s.stopped) after += dt;
     }
-    setState({ raceD: s.d, raceX: s.x, raceCenter: raceCenterAt(s.d), raceCue: cue, finishTime: s.finishTime, stopped: s.stopped, perfectStop: s.perfectStop });
+    setState({ raceD: s.d, raceX: s.x, raceCenter: raceCenterAt(s.d), raceCue: cue, finishTime: s.finishTime, stopped: s.stopped, perfectStop: s.perfectStop, rivalD: rv.s.d, rivalX: rv.s.x, rivalTime: rv.s.finishTime });
     draw();
     if (s.stopped && after > 1.2) { screen.close(); return true; }
     return false;
-  }).then(() => s);
+  }).then(() => ({ car: s, rival: finishRival(rv) }));
 }
 
 // ------------------------------------------------------------ crane
@@ -267,7 +295,12 @@ function craneLoop(game, target, helper) {
     if (phase === 'move') {
       claw = moveClaw(claw, screen.axis(), dt);
       const next = craneCue(claw, target);
-      if (next.id !== cue) { cue = next.id; hud.say(call, next.en, next.ja); if (cue === 'under') sfx.discover(); }
+      if (next.id !== cue) {
+        cue = next.id; hud.say(call, next.en, next.ja);
+        if (cue === 'under') sfx.discover();
+        // The friend points the way and gets excited when the prize is under the claw.
+        helper?.char.play(cue === 'under' ? 'cheer' : 'point', 0.9);
+      }
       if (screen.take('drop')) { phase = 'down'; t = 0; screen.setAction('drop', { disabled: true }); sfx.whoosh(); }
     } else if (phase === 'down' && t >= 0.7) {
       held = craneGrab(claw);
@@ -298,14 +331,87 @@ async function playRhythm(game, c, { friends, who }) {
   await c.say(friend || who, line("Let's play the rhythm game! Press TAP when the arrow is in the middle!", 'リズムゲームをしよう！矢印がまん中のときにTAP！'), friend ? { gesture: 'happy', expr: 'happy' } : {});
   await c.ask([opt('go', friend ? "Let's play together!" : "OK! Let's go!", friend ? 'いっしょにあそぼう！' : 'よし！行こう！', { emoji: '🥁', phrases: ["let's play together", "let's go", 'ok'], keys: [['together', 'go', 'ok']], area: 'wantto' })]);
   const grades = [];
+  if (friend) return rhythmDuet(game, c, friend, who);
   setState({ phase: 'playing', beats: 8 });
   const hits = await asActivity(game, () => rhythm(game, friend, { beats: 8, title: ARCADE_GAMES.rhythm.title, gesture: 'dance', grades, period: 1.1 }));
   const perfect = grades.filter((g) => g === 'perfect').length;
-  const theirs = friend ? rhythmFriendScore(friend.npc.id) : null;
-  const won = friend ? hits >= theirs : hits >= 5;
-  setState({ phase: 'result', won, result: { hits, perfect, theirs } });
+  const won = hits >= 5;
+  setState({ phase: 'result', won, result: { hits, perfect, theirs: null } });
   if (hits >= 5) sfx.great(); else sfx.good();
   await c.say(who, line(`You got ${hits} out of 8! Perfect: ${perfect}.`, `8こ中${hits}こせいこう！パーフェクトは${perfect}こ。`));
-  if (friend) await c.say(friend, hits >= theirs ? line(`I got ${theirs}. You win! Great rhythm!`, `わたしは${theirs}こ。あなたの勝ち！リズムがいいね！`) : line(`I got ${theirs}. Let's play again sometime!`, `わたしは${theirs}こ。またいっしょにやろうね！`), { gesture: 'happy', expr: 'happy' });
   return { kind: 'rhythm', won, score: hits >= 5 ? 3 : 2 };
+}
+
+// With a friend the song is shared: four beats each, taking turns. The
+// friend's taps animate on the same meter and their character dances on the
+// beat; a music fan plays a little better (DESIGN_DECISIONS 2026-11-23).
+const SECTIONS = ['me', 'friend', 'me', 'friend'];
+async function rhythmDuet(game, c, friend, who) {
+  const hud = game.activityHud;
+  const skill = npcSkill(friend.npc, 'rhythm');
+  const r = rngFor('rhythm-duet', friend.npc.id, game.world.day, game.world.period, ++raceRound);
+  const tag2 = { name: friend.npc.name, color: friend.npc.color || '#E0607E' };
+  const melody = [0, 2, 4, 2, 0, 4, 5, 7, 7, 5, 4, 2, 0, 2, 4, 0];
+  const results = [], mine = [], theirs = [];
+  let perfect = 0;
+  setState({ phase: 'playing', beats: 16, duet: true, section: 0 });
+  await asActivity(game, async () => {
+    hud.show(ARCADE_GAMES.rhythm.title);
+    hud.setScore(results, 16);
+    hud.showMeter(true);
+    for (let k = 0; k < SECTIONS.length; k++) {
+      const turn = SECTIONS[k];
+      setState({ section: k, turn });
+      hud.setHint(turn === 'me' ? 'Your turn! Press TAP in the green!' : `${friend.npc.name}'s turn! Watch!`, turn === 'me' ? 'あなたの番！緑でTAP！' : `${friend.npc.name}の番！見ててね！`);
+      hud.say(tag2, turn === 'me' ? 'Your turn! You can do it!' : 'My turn! Watch me!', turn === 'me' ? 'あなたの番！がんばって！' : 'わたしの番！見ててね！');
+      await wait(700);
+      for (let i = 0; i < 4; i++) {
+        faultPoint('arcade:tick');
+        let t = 0, pressed = null;
+        const T = 1.1;
+        // The friend's tap: a hit lands in the green, a miss lands outside it.
+        const hitPlan = turn === 'friend' ? r.next() < Math.min(0.92, skill + 0.18) : null;
+        const at = hitPlan === null ? null : hitPlan ? 0.5 + (r.next() - 0.5) * 0.2 : (r.next() < 0.5 ? 0.25 : 0.78);
+        hud.button(turn === 'me' ? '🎵 TAP!' : null, turn === 'me' ? () => { if (pressed === null) pressed = Math.min(1, t / T); } : null, 'throw');
+        await until(game, (dt) => {
+          t += dt;
+          hud.setNeedle(Math.min(1, t / T));
+          if (at !== null && pressed === null && t / T >= at) pressed = at;
+          return (turn === 'me' ? pressed !== null : pressed !== null && t / T >= at + 0.08) || t >= T;
+        });
+        const grade = rhythmGrade(pressed);
+        const hit = grade !== 'miss';
+        results.push(hit);
+        (turn === 'me' ? mine : theirs).push(hit);
+        if (turn === 'me' && grade === 'perfect') perfect++;
+        hud.setScore(results, 16);
+        if (hit) {
+          sfx.note(melody[results.length - 1]);
+          hud.pop(grade === 'perfect' ? 'Perfect!' : 'Good!', 'good');
+          (turn === 'me' ? game.player.char : friend.char).play('dance', 0.6);
+        } else hud.pop('Miss', 'wait');
+        setState({ mine: mine.filter(Boolean).length, theirs: theirs.filter(Boolean).length });
+        await wait(200);
+      }
+      if (turn === 'friend') {
+        const got = theirs.slice(-4).filter(Boolean).length;
+        hud.say(tag2, got >= 3 ? 'Yay! I did it!' : 'Oops! Your turn!', got >= 3 ? 'やった！' : 'あれ？あなたの番！');
+      }
+    }
+    hud.button(null);
+    hud.showMeter(false);
+  });
+  const myHits = mine.filter(Boolean).length, friendHits = theirs.filter(Boolean).length, team = myHits + friendHits;
+  setState({ phase: 'result', won: team >= 10, result: { hits: myHits, perfect, theirs: friendHits, team } });
+  if (team >= 10) sfx.great(); else sfx.good();
+  await c.say(who, line(`Team score: ${team} out of 16! You got ${myHits}, ${friend.npc.name} got ${friendHits}.`, `チームのスコア：16こ中${team}こ！あなたは${myHits}こ、${friend.npc.name}は${friendHits}こ。`));
+  const l = myHits >= 6 ? line("Great job! You're good at music!", 'すごい！音楽がとくいだね！', { area: 'adjectives', expr: 'i.goodat', template: "You're good at ___!" })
+    : myHits >= 4 ? line('Great job! We make a good team!', 'すごい！いいチームだね！') : line("Let's try again! It's fun!", 'もう一回やろう！楽しいね！');
+  await c.say(friend, l, { gesture: myHits >= 4 ? 'clap' : 'happy', expr: 'happy' });
+  // What you saw becomes what you say: a music fan who played well is "good at music".
+  if (friendHits >= 6) {
+    await c.ask([opt('goodat', `You're good at music, ${friend.npc.name}!`, `${friend.npc.name}、音楽がとくいだね！`, { emoji: '🎵', phrases: ["you're good at music", 'good at music'], keys: [['good', 'music']], area: 'adjectives', expr: 'i.goodat', template: "You're good at ___!" })]);
+    await c.say(friend, line(goodAt(friend.npc, 'rhythm') ? 'Thank you! I like music!' : 'Thank you! I practiced!', goodAt(friend.npc, 'rhythm') ? 'ありがとう！音楽が好きなんだ！' : 'ありがとう！練習したんだ！'), { expr: 'happy' });
+  }
+  return { kind: 'rhythm', won: team >= 10, score: team >= 10 ? 3 : 2, team };
 }

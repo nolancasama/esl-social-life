@@ -4,6 +4,7 @@
 // `focus` field, so they keep counting for all their NPCs (DESIGN_DECISIONS
 // 2026-11-16, "Only one-on-one experiences open the next level").
 
+import { thingsState } from './things.js';
 import { fstate } from './friendship.js';
 import { pocketMoney } from './mall.js';
 
@@ -25,6 +26,7 @@ export function migrateSave(save) {
   if (!save.time || typeof save.time !== 'object') save.time = { day: 0, period: 0 };
   pocketMoney(save);
   fstate(save);
+  thingsState(save);
   if (!(save.version >= SAVE_VERSION)) save.version = SAVE_VERSION;
   return save;
 }

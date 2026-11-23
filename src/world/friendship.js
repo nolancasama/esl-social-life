@@ -443,8 +443,12 @@ export function describeMemory(world, m, npcId, day) {
       : d.mallChoice === 'shop' ? ['We went shopping at Niji Mall', 'にじモールで買い物したね']
         : ['We ate at Niji Mall', 'にじモールでごはんを食べたね'];
     again = { act: 'mall' }; place = 'mall';
+    // The actual game and its result (DESIGN_DECISIONS 2026-11-23).
+    if (d.mallChoice === 'games' && d.game === 'racing') { extraEn = d.won ? ' You won our race! Let’s race again!' : ' Remember our race? Let’s play again!'; extraJa = d.won ? 'レースはあなたの勝ちだったね！またやろう！' : 'レース、覚えてる？またやろう！'; }
+    else if (d.mallChoice === 'games' && d.game === 'crane') { extraEn = d.won ? ' You got a prize from the crane game!' : ' The crane game was fun!'; extraJa = d.won ? 'クレーンゲームで景品をとったね！' : 'クレーンゲーム、楽しかったね！'; }
+    else if (d.mallChoice === 'games' && d.game === 'rhythm') { extraEn = ' We played the rhythm game together!'; extraJa = 'いっしょにリズムゲームをしたね！'; }
   } else if (m.type === 'activity' && m.act === 'soccer') {
-    en = 'We played soccer'; ja = 'サッカーしたね'; again = { act: 'soccer' }; place = 'park';
+    en = d.item === 'ball' ? 'We played soccer with your ball' : 'We played soccer'; ja = d.item === 'ball' ? 'あなたのボールでサッカーしたね' : 'サッカーしたね'; again = { act: 'soccer' }; place = 'park';
   } else if (m.type === 'activity' && m.act === 'catch') {
     en = 'We played catch'; ja = 'キャッチボールしたね'; again = { act: 'catch' }; place = 'park';
   } else if (m.type === 'event' && d.recall?.en) {
@@ -457,6 +461,9 @@ export function describeMemory(world, m, npcId, day) {
   }
   const diff = day - m.day;
   const when = whenWords(diff, m.day);
+  // Vary how a memory is brought up again, so a friend never repeats it word for word.
+  const n = fstate(world.save).refs?.[m.id]?.n || 0;
+  if (when && n % 2 === 1) { en = `Remember? ${en}`; ja = `覚えてる？${ja}`; }
   return {
     memoryId: m.id, type: m.type, act: m.act, template: d.template || null, day: m.day, diff, when, place, again,
     companions: others.map((o) => o.id), detail: d,

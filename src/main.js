@@ -10,6 +10,7 @@ import { buildClass, chooseFirstPair } from './world/generator.js';
 import { meet } from './world/relationships.js';
 import { assignStyles } from './world/personality.js';
 import { migrateSave } from './world/migrate.js';
+import { forgetWorn } from './world/things.js';
 import { logExpr } from './world/progression.js';
 import { DEFAULT_ROSTER } from './data/roster.js';
 import { interest, ability, dateText } from './data/content.js';
@@ -146,6 +147,8 @@ async function boot() {
         cls, stage: mirrorStage, editLook: save.player.look,
         onCancel: restore,
         onDone: ({ look }) => {
+          // A look made at the mirror becomes the base look; worn things are part of it now.
+          forgetWorn(save);
           save.player.look = look;
           game.player.setLook(look);
           game.player.char.showBag(false);

@@ -87,6 +87,14 @@ async function goTo(plan) {
     const g = window.__esl, w = g.world;
     w.save.time = { day: plan.day, period: plan.period };
     w.ensureDaily();
+    // Since the three-floor mall, a hangout pair meets on 2F (mallFloorFor): go to their floor.
+    if (plan.loc === 'mall' && plan.a) {
+      const { mallFloorFor } = await import('/src/world/mall.js');
+      const n = w.npc(plan.a);
+      const floor = mallFloorFor(n, w.slot(n), plan.day);
+      await g.enterScene(['mall', 'mall2', 'mall3'][floor - 1], floor === 1 ? 'door' : 'elevator');
+      return;
+    }
     await g.enterScene(['cafe', 'mall'].includes(plan.loc) ? plan.loc : 'town', ['cafe', 'mall'].includes(plan.loc) ? 'door' : 'park');
   }, plan);
   await settle();

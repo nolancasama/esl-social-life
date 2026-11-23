@@ -23,6 +23,9 @@ import { styleGesture } from '../world/personality.js';
 import { FOODS, petPhrase, listEn } from '../data/content.js';
 import { hangoutToReport } from '../world/social.js';
 import { askToday } from './school.js';
+import { THINGS, owns, noticeFor, markNoticed } from '../world/things.js';
+import { mallItem } from '../world/mall.js';
+import { exprFreshness } from '../world/progression.js';
 
 // ---------------------------------------------------------------- helpers
 
@@ -92,6 +95,9 @@ export async function talkToNpc(game, actor) {
     // Friendship events: an open offer, or maybe something new (src/dialogue/events.js).
     await friendshipMoment(c, actor);
     actor.approached = false;
+    if (c.ended || c.result) return;
+    // Friends notice what you really own, wear or show (DESIGN_DECISIONS 2026-11-23).
+    await possessionMoment(c, actor);
     if (c.ended || c.result) return;
     if (w.level(npc.id) >= 2 && !w.daily.quiz[npc.id] && Math.random() < 0.3) await memoryQuiz(c, actor);
     if (w.isKnown(npc.id) && (w.level(npc.id) >= 2 || w.save.flags.fd === 'done')) await maybeIntroduceFriend(c, actor);
@@ -254,10 +260,67 @@ async function personalLine(c, actor) {
 // Questions friends ask the player (answers are kept in save.player.answers).
 const NPC_QUESTIONS = ['week:5', 'food', 'week:6', 'pet'];
 
+// ---------------------------------------------------------------- possessions
+
+async function possessionMoment(c, actor) {
+  const w = c.world, npc = actor.npc, game = c.game;
+  if (w.level(npc.id) < 1 || w.save.flags.fd !== 'done') return false;
+  const place = game.sceneId === 'home' ? 'home' : game.locationId;
+  const n = noticeFor(w.save, npc, { place, day: w.day });
+  if (!n) return false;
+  markNoticed(w.save, npc.id, n.id, w.day);
+  const def = THINGS[n.id];
+  await c.say(actor, line(n.en, n.ja, { area: def.wear ? 'adjectives' : 'possessions', expr: def.wear ? 'adj.cool' : 'n.have' }), { gesture: def.wear ? 'clap' : 'point', expr: 'surprised' });
+  if (def.wear) {
+    await c.ask([opt('thanks', 'Thank you! I got it at Niji Mall.', 'ありがとう！にじモールで買ったんだ。', { emoji: '😊', phrases: ['thank you', 'i got it at niji mall'], keys: [['thank']], area: 'shopping' })]);
+    return true;
+  }
+  if (n.id === 'ball' && place === 'park' && w.free && !w.planWith(npc.id)) {
+    const r = await c.ask([
+      opt('yes', 'Yes! I want to play!', 'うん！やりたい！', { emoji: '⚽', phrases: ['yes i want to play', 'yes', "let's play"], keys: [['yes', 'play', 'want']], area: 'wantto', expr: 'a.wantplay', template: 'I want to ___.' }),
+      opt('no', 'Maybe next time!', 'また今度ね！', { emoji: '🙂', phrases: ['maybe next time', 'next time'], keys: [['next', 'maybe']], tone: 'quiet' }),
+    ]);
+    if (r.id === 'yes' && await confirmTime(c, '⚽ Soccer at Sakura Park?', 'さくら公園でサッカー？')) {
+      c.result = { then: () => game.activities.run('soccer', [actor], { like: 'soccer', item: 'ball' }) };
+    }
+    return true;
+  }
+  await c.ask([opt('yes', 'Yes! It’s fun!', 'うん！楽しいよ！', { emoji: '😄', phrases: ["yes it's fun", 'yes', 'it is fun'], keys: [['yes', 'fun']], area: 'possessions' })]);
+  if (place === 'home') await c.say(actor, line("Let's play with it together!", 'いっしょにあそぼう！', { area: 'wantto' }), { expr: 'happy' });
+  else await c.say(actor, line('Cool! I want to see it sometime!', 'いいね！今度見せてね！'), { expr: 'happy' });
+  return true;
+}
+
+/** "Do you have a ___?" about a thing this friend likes; only the true answer is offered. */
+async function askHave(c, actor, id) {
+  const w = c.world, npc = actor.npc;
+  const item = mallItem(id);
+  const has = owns(w.save, id);
+  await c.say(actor, line(`${c.playerName}, do you have ${item.en}?`, `${c.playerName}は${item.ja}を持ってる？`, { area: 'possessions', expr: 'q.have', template: 'Do you have ___?' }));
+  await c.ask([has
+    ? opt('yes', 'Yes, I do.', 'うん、持ってるよ。', { emoji: '🙋', phrases: ['yes i do', 'yes', `i have ${item.en}`], keys: YES_KEYS, area: 'possessions', expr: 'a.yesido', template: 'Yes, I do.' })
+    : opt('no', "No, I don't.", 'ううん、持ってない。', { emoji: '🙅', phrases: ["no i don't", 'no', `i don't have ${item.en}`], keys: NO_KEYS, area: 'possessions', expr: 'a.noidont', template: "No, I don't." })]);
+  if (has) {
+    const place = { ball: "Let's play soccer in the park sometime!", board_game: "Let's play it at your house sometime!", robot: 'Can I play with your robot sometime?', kendama: 'Can you do tricks? Show me sometime!' }[id] || 'Cool! Show me sometime!';
+    const ja = { ball: '今度公園でサッカーしよう！', board_game: '今度あなたの家でやろう！', robot: '今度ロボットで遊ばせて！', kendama: 'わざできる？今度見せて！' }[id] || 'いいね！今度見せて！';
+    await c.say(actor, line(`Cool! ${place}`, `いいね！${ja}`, { area: 'wantto' }), { gesture: 'happy', expr: 'happy' });
+  } else {
+    const plural = /^an? /.test(item.en) ? `${item.en.replace(/^an? /, '')}s` : item.en;
+    await c.say(actor, line(`Niji Mall has ${plural}. It's ${item.price} yen.`, `にじモールに売ってるよ。${item.price}円だよ。`, { area: 'shopping', expr: 'shop.yen', template: "It's ___ yen." }), { expr: 'happy' });
+  }
+}
+
 async function npcAsks(c, actor) {
   const w = c.world, npc = actor.npc;
   const r = w.rel(npc.id);
   if (!r.asked) r.asked = {};
+  // Possessions practice from real save data, about something this friend likes.
+  const have = Object.values(THINGS).find((t) => !t.wear && t.fans.some((l) => (npc.likes || []).includes(l)) && r.asked[`have:${t.id}`] === undefined);
+  if (have && r.asked.pet !== undefined) {
+    r.asked[`have:${have.id}`] = w.day;
+    await askHave(c, actor, have.id);
+    return;
+  }
   const q = NPC_QUESTIONS.find((k) => r.asked[k] === undefined);
   if (!q) return;
   r.asked[q] = w.day;
@@ -430,7 +493,7 @@ function topicList(c, actor, guide) {
   if (intro) add({ id: 'introduce', area: 'intro', base: 6, card: opt('t-intro', `This is ${intro.npc.name}.`, `こちらは${intro.npc.name}です。`, { emoji: '🤝', phrases: [`this is ${intro.npc.name}`], keys: [[intro.npc.name.toLowerCase()]], expr: 'i.thisis', area: 'intro', template: 'This is ___.' }), run: (cc, a) => topicIntroduce(cc, a, intro) });
 
   for (const t of T) {
-    t.score = t.base + w.need(t.area) * 1.1 + Math.random() * 1.2;
+    t.score = t.base + w.need(t.area) * 1.1 + exprFreshness(w.save, t.card.expr) * 1.2 + Math.random() * 1.2;
     if (c.done.has(t.id)) t.score -= 30;
     if (guide.includes(t.id) || (t.id.startsWith('week:5') && guide.includes('week:5'))) { t.score += 50; t.card = { ...t.card, highlight: true }; }
   }

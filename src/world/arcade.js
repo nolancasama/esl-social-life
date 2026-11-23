@@ -1,6 +1,6 @@
 // Game Center minigame rules. Pure and deterministic: the activities draw
 // them, tests check them. Arcade play is free (DESIGN_DECISIONS 2026-11-22).
-import { hashString } from '../core/rng.js';
+import { hashString, rngFor } from '../core/rng.js';
 
 // ------------------------------------------------------------ crane game
 // The machine floor is a unit square seen from above: x 0 (left) → 1 (right),
@@ -124,14 +124,14 @@ export function raceCueAt(d) {
 export function newRace() { return { d: 0, x: 0, v: 0, t: 0, finishTime: null, stopped: false, perfectStop: false, offroad: 0 }; }
 
 /** Advance one frame. steer is -1, 0 or 1; brake is the STOP button. */
-export function stepRace(s, { steer = 0, brake = false }, dt) {
+export function stepRace(s, { steer = 0, brake = false }, dt, { maxSpeed = RACE_SPEED } = {}) {
   if (s.stopped) return s;
   const n = { ...s };
   n.x += steer * STEER_SPEED * dt;
   const onRoad = Math.abs(n.x - raceCenterAt(n.d)) <= RACE_ROAD_HALF;
   if (!onRoad) n.offroad += dt;
   const past = n.d >= RACE_STOP_ZONE.to;
-  const target = brake || past ? 0 : onRoad ? RACE_SPEED : RACE_SPEED * 0.5;
+  const target = brake || past ? 0 : onRoad ? maxSpeed : maxSpeed * 0.5;
   const rate = brake || past ? 18 : 6;
   n.v += Math.max(-rate * dt, Math.min(rate * dt, target - n.v));
   n.d += n.v * dt;
@@ -143,6 +143,62 @@ export function stepRace(s, { steer = 0, brake = false }, dt) {
     n.perfectStop = !!brake && n.d >= RACE_STOP_ZONE.from && n.d <= RACE_STOP_ZONE.to;
   }
   return n;
+}
+
+// ------------------------------------------------------------ simulated rival car
+// The rival drives the same track with the same rules (DESIGN_DECISIONS
+// 2026-11-23): it steers toward the road a little ahead with a short
+// reaction delay, its top speed is a little below the player's, and it makes
+// two or three seeded small mistakes (a wobble off the line). A clean player
+// always wins; a careless one can lose. No physics engine, no randomness at
+// run time: everything comes from the seed.
+
+/** skill 0.35–0.8 (see world/things.js npcSkill). */
+export function newRival(skill = 0.5, seed = 'rival') {
+  const r = rngFor('race-rival-v2', seed);
+  const n = 2 + (r.next() < 0.5 ? 1 : 0);
+  const mistakes = [];
+  for (let i = 0; i < n; i++) {
+    const at = 18 + (i + r.next() * 0.8) * ((RACE_FINISH - 30) / n);
+    mistakes.push({ at, dur: 0.35 + r.next() * 0.35 + (0.8 - skill) * 0.4, dir: r.next() < 0.5 ? -1 : 1, done: false });
+  }
+  return {
+    s: newRace(), skill, steer: 0, cool: 0, mistake: null, mistakes,
+    react: 0.22 - skill * 0.12, maxSpeed: RACE_SPEED * (0.9 + skill * 0.07),
+  };
+}
+
+/** Advance the rival one frame. Returns { rv, event } where event is 'mistake' | 'finish' | 'stop' | null. */
+export function stepRival(rv, dt) {
+  if (rv.s.stopped) return { rv, event: null };
+  const n = { ...rv, mistakes: rv.mistakes.map((m) => ({ ...m })) };
+  let event = null;
+  const next = n.mistakes.find((m) => !m.done && n.s.d >= m.at);
+  if (next && !n.mistake) { next.done = true; n.mistake = { t: next.dur, dir: next.dir }; event = 'mistake'; }
+  n.cool -= dt;
+  if (n.mistake) {
+    n.mistake = { ...n.mistake, t: n.mistake.t - dt };
+    n.steer = n.mistake.dir;
+    if (n.mistake.t <= 0) n.mistake = null;
+  } else if (n.cool <= 0) {
+    // Look a little ahead, like the player following the road.
+    const diff = raceCenterAt(n.s.d + 3) - n.s.x;
+    n.steer = Math.abs(diff) < 0.03 ? 0 : Math.sign(diff);
+    n.cool = n.react;
+  }
+  const brake = n.s.finishTime !== null && n.s.d >= RACE_STOP_ZONE.from + 1.5;
+  const before = n.s.finishTime;
+  n.s = stepRace(n.s, { steer: n.steer, brake }, dt, { maxSpeed: n.maxSpeed });
+  if (before === null && n.s.finishTime !== null) event = 'finish';
+  if (n.s.stopped) event = 'stop';
+  return { rv: n, event };
+}
+
+/** Run a rival to the end (used when the player stops first, and by tests). */
+export function finishRival(rv, dt = 1 / 60) {
+  let cur = rv;
+  for (let i = 0; i < 60 * 120 && !cur.s.stopped; i++) cur = stepRival(cur, dt).rv;
+  return cur;
 }
 
 /** A friend's (or the rival car's) fixed, fair finishing time in seconds. */

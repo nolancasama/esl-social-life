@@ -43,6 +43,9 @@ import { runEvent, eventTitle } from '../dialogue/events.js';
 import { confirmTime } from '../dialogue/common.js';
 import { armFault, faultPoint } from '../core/fault.js';
 import { recoverGame } from '../activities/recovery.js';
+import { owns, latestDrawing } from '../world/things.js';
+import { thingPlaySnapshot, useThing, playKickups, wearAtMirror } from '../activities/things.js';
+import { paintPicture } from '../activities/hobby.js';
 
 const BUILDERS = { town: buildTown, classroom: buildClassroom, cafe: buildCafe, mall: buildMall, mall2: buildMall2, mall3: buildMall3, home: buildHome, friendhouse: buildFriendHouse, musicroom: buildMusicRoom, gym: buildGym, artroom: buildArtRoom };
 const MALL_FLOORS = ['mall', 'mall2', 'mall3'];
@@ -138,6 +141,7 @@ export class Game {
   get music() { return musicSnapshot(); }
   get mallMeal() { return mallMealSnapshot(this); }
   get arcade() { return arcadeSnapshot(); }
+  get thingPlay() { return thingPlaySnapshot(); }
   /** Dev-only fault injection for recovery tests; a no-op in production builds. */
   fault(name) { return armFault(name); }
   /** Read-only reliability state for tests. */
@@ -309,6 +313,24 @@ export class Game {
     const photos = store.loadPhotos(w.save.id).slice(0, 8).map((p) => p.url);
     this.scene.setPhotos(photos);
     this.scene.setSouvenirs(w.save.souvenirs || [], (s) => souvenirMesh(s.kind));
+    this.refreshHomeThings();
+  }
+
+  /** The robot on the floor and the newest drawing on the wall (bedroom only). */
+  refreshHomeThings() {
+    const scene = this.scenes.home;
+    if (!scene?.setThings) return;
+    const save = this.world.save;
+    const d = latestDrawing(save);
+    let tex = null;
+    if (d) {
+      const cv = document.createElement('canvas');
+      cv.width = 330; cv.height = 250;
+      paintPicture(cv.getContext('2d'), 0, 0, 330, 250, { color: d.color, emoji: d.subject?.emoji || '🎨' }, 3);
+      tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+    }
+    scene.setThings({ robot: owns(save, 'robot'), makeRobot: () => souvenirMesh('mall_robot'), drawing: tex });
   }
 
   // ------------------------------------------------------------ start
@@ -465,7 +487,14 @@ export class Game {
   }
 
   // ------------------------------------------------------------ interaction
-  _interactables() { return [...(this.scene?.interact || []), ...this.extraInteract, ...mallSeatInteractions(this)]; }
+  _interactables() { return [...(this.scene?.interact || []), ...this.extraInteract, ...mallSeatInteractions(this), ...this._thingSpots()]; }
+
+  /** With a soccer ball of your own, the park has a kick-up spot. */
+  _thingSpots() {
+    if (this.sceneId !== 'town' || !this.scene?.field || !owns(this.world.save, 'ball') || this.activities.search) return [];
+    const f = this.scene.field.a;
+    return [{ id: 'kickups', kind: 'kickups', x: f.x + 1.6, z: f.z + 0.6, r: 1.3, icon: '⚽', label: { en: 'Kick-ups with my ball', ja: '自分のボールでリフティング' } }];
+  }
 
   _updateTarget() {
     const p = this.player;
@@ -624,8 +653,10 @@ export class Game {
       case 'journal': return this.menus.open('journal');
       case 'messages': return this.menus.open('phone');
       case 'calendar': return this.menus.open('calendar');
-      case 'shelf': return this.menus.open('shelf');
-      case 'mirror': return this.onMirror?.();
+      case 'shelf': return this.menus.open('things');
+      case 'mirror': return wearAtMirror(this);
+      case 'thing': return useThing(this, it.thing, 'play');
+      case 'kickups': return playKickups(this);
       case 'blackboard': return this._narrate({ name: '📝 Blackboard', color: '#2F5D4A' }, line(`Today's English: “${this.boardPhrase}”`, '今日の英語'));
       case 'special': return this._narrate({ name: '📋 Café', color: '#2F9E6E' }, line(`Today's special: pancakes! 🥞 What do you want to eat?`, '今日のおすすめはパンケーキ！何を食べたい？', { area: 'food' }));
       case 'counter': { const staff = this.npcs.actors.find((a) => a.special === 'staff'); if (staff) return this.talkTo(staff); return; }

@@ -171,6 +171,92 @@ for the workers; later phase notes append under this heading.
   interactions. Debug hooks may only set up state (money, day, level).
   Existing suites, perf and 1366×768 screenshots are rerun before deploy.
 
+**Phase 1 implementation notes (2026-11-23, `c294902`)**
+- `activities/outcome.js` normalises results; `activities/recovery.js` holds
+  `recoverGame` and the per-activity cleanup registry (`onActivityCleanup`).
+  `ArcadeScreen.closeAll()` removes cabinet screens and their key listeners.
+- `until()` now rejects when its tick throws (previously the main loop
+  caught the error every frame and the activity hung forever) and exposes
+  `game.activityAbort` so recovery can end a pending tick.
+- `game.saveHold` blocks every save between a completed activity's rewards
+  and `advanceTime`, which commits them with the time and the photo
+  (`beforeSave`). Previously only `friend_house` cleared the save timer.
+- `Game.useInteract` and `Game.enterScene` are guarded. A failed scene
+  change goes back to the previous scene (or home) and rethrows, so an
+  activity in progress counts as failed. `fade()` can no longer leave the
+  screen black.
+- Outing meals use one meal id per day and period (`outingMealId`). A replay
+  of the same outing after a reload is served from its receipt
+  (`servePaidMallMeal`) instead of charging again.
+- Dev-only fault points: `activity:play`, `activity:group`, `arcade:tick`,
+  `purchase:food`, `purchase:item`, `scene:enter`, `thing:*`. They are armed
+  through `window.__esl.fault(name)` in dev builds only. `e2e:recovery`
+  covers them; harness trust was shown with a known-good pass and a broken
+  assertion (`RECOVERY_HARNESS_BROKEN_ASSERTION=1`) failing with exit 1.
+
+**Phases 2–4 implementation notes (2026-11-23)**
+- `world/things.js` (pure) holds the catalogue, `save.things`, wearing (the
+  original look values are kept in `orig` and restored exactly),
+  `gamesCount`, drawings, notices, `visitChoices` and `npcSkill`.
+  `activities/things.js` holds the plays and `runThing`, which recovers on
+  error. Shelf → My Things; phone → My Things; mirror → wear / change look;
+  a bedroom robot interaction; a park kick-up spot when the ball is owned.
+- Drawings are stored as data (subject and colour, at most six) and
+  repainted with the hobby `paintPicture`. They are never images, so they
+  cost no storage. The newest hangs above the bed.
+- *Modified during build:* My Things actions only run where they make sense
+  (the ball in the park; the robot, game, books, pencils and kendama at
+  home). Elsewhere the button is disabled with a hint, which is simpler for
+  students than a "bring it" mechanic.
+- A Niji Mall outing's "Do you have a board game?" and the home visit's
+  "How many games do you have?" now offer only the true answer. Before,
+  they offered fixed or contradictory cards.
+- Racing: `newRival / stepRival / finishRival` in `world/arcade.js`; the old
+  ghost time is kept only for its existing test. A clean player finishes in
+  about 21.3 s; rivals take 22.4–24.3 s depending on skill and seed. Rhythm
+  with a friend is `rhythmDuet` (4 beats each, 16 in all, team score). The
+  home TV race laps are seeded by friend skill instead of fixed.
+- Memories: Activities.run adds `detail.item` and `detail.place`. Visits
+  record `game`, `item`, `coop`, `wish` and `wishMet`, and have specific
+  recall lines. Mall racing, crane and rhythm memories add the real result.
+  A memory brought up again alternates its wording ("Remember? …").
+- Repetition: topic choice adds `exprFreshness` (1 for never said, 0 after
+  six times) on top of the existing per-area need.
+- *Rejected during build:* a save-version bump. `save.things` is optional and
+  created idempotently, so v1–v3 saves load unchanged.
+
+**Phase 5 integration notes (2026-11-23)**
+- `e2e:living` plays A (ball: buy, duplicate refused, reload, kick-ups, a
+  soccer fan notices it, soccer, recall), B (board game: buy, home visit,
+  "What do you want to play?", Picture Pairs with real friend turns, one
+  memory), C (mall outing → racing against the live rival, one reward and
+  one period, recall of the real result) and E (robot commands, cap at the
+  mirror across a reload, a failed thing play recovering, reading). The
+  brief's D (English with consequences) has no separate section: its
+  behaviour is exercised inside A–C (true-answer cards, the choice deciding
+  the next activity) and E (directions grammar drives the robot).
+- Found by the e2e run and fixed in the game: the picture-book overlay had
+  no `pointer-events: auto`, so the scene canvas swallowed clicks on its
+  Next ▶ button; the robot snapshot published a new `level` a frame before
+  its `pose`/`star` (now set together); kick-ups used `frameTalk`, which
+  could film the player from behind the park's trees and pole, and now uses
+  a fixed shot from the open south side of the field like catch and soccer;
+  the robot board is slightly smaller so it no longer covers the "Tap a
+  card!" hint at 1366×768. Mirror toast now says "your cap" (not "my cap"),
+  and the Japanese uses かぶる for the cap and 着る for the T-shirt.
+- NPC straight walks (`npcs._stepWalk`) now finish after 0.8 s without
+  progress instead of walking in place until the 10 s timeout. A day-one
+  friend blocked by a desk on the scripted next-morning approach used to
+  talk only after 10 s (an intermittent `playthrough` failure); now they
+  speak from where they stopped. Pathfinding is still deferred.
+- Harness rules learned: the day's random lost-item favour legitimately
+  takes priority when it falls on the friend being tested, so scenes that
+  test a different conversation clear `daily.lost` in setup; `npcs.ensure`
+  keeps an NPC who is already in the scene where they are, so the harness
+  removes that actor before standing them by the field; any known soccer
+  fan nearby may be the one who notices the ball, so other known fans are
+  cleared from the park in setup.
+
 ## 2026-11-22 — Niji Mall three floors: review of the expansion brief
 
 The user's brief (three floors, solo eating, food prices, arcade, flexible

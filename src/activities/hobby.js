@@ -101,13 +101,13 @@ const DRAW_FOR = {
   sweets: ['a cake', 'ケーキ', '🍰'], animals: ['a dog', '犬', '🐶'], bugs: ['a ladybug', 'てんとう虫', '🐞'], shopping: ['a shop', 'お店', '🛍️'], skateboarding: ['a skateboard', 'スケボー', '🛹'],
   comics: ['a comic', 'まんが', '📖'], cycling: ['a bike', '自転車', '🚲'],
 };
-const COLORS = [
+export const COLORS = [
   { id: 'red', en: 'red', ja: '赤', hex: '#FF6B6B' }, { id: 'blue', en: 'blue', ja: '青', hex: '#4DABF7' }, { id: 'yellow', en: 'yellow', ja: '黄色', hex: '#FFD43B' },
   { id: 'green', en: 'green', ja: '緑', hex: '#69DB7C' }, { id: 'pink', en: 'pink', ja: 'ピンク', hex: '#F783AC' }, { id: 'purple', en: 'purple', ja: 'むらさき', hex: '#9775FA' }, { id: 'orange', en: 'orange', ja: 'オレンジ', hex: '#FFA94D' },
 ];
 const drawFor = (likeId) => { const d = DRAW_FOR[likeId]; return d ? { en: d[0], ja: d[1], emoji: d[2], like: likeId } : null; };
 
-function paintPicture(ctx, x, y, w, h, pic, step) {
+export function paintPicture(ctx, x, y, w, h, pic, step) {
   ctx.save();
   ctx.fillStyle = '#FFFDF7';
   ctx.fillRect(x, y, w, h);

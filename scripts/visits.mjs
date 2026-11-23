@@ -81,7 +81,7 @@ const v1 = await ev(({ id, ev: eid }) => {
   return { gone: !g.npcs.actorFor(id), period: w.period, recall: m?.detail?.recall?.en, game: m?.detail?.game, souvenir: w.save.souvenirs.some((s) => s.kind === 'visit' && s.npcId === id), done: g.friendship.history.some((h) => h.id === eid) };
 }, { id: req.from, ev: req.eventId });
 log('visit', v1);
-expect(v1.done && v1.recall === 'I visited your house', 'the visit is remembered');
+expect(v1.done && v1.recall === 'We played a racing game at your house', 'the visit is remembered as the racing game it was');
 expect(v1.game === 'race', 'they played the racing game');
 expect(v1.gone, 'the friend left through the door');
 expect(v1.period === t0.period + 1, 'the visit used one period');

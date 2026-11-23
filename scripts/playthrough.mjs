@@ -209,6 +209,10 @@ const remembered = await (async () => {
   return null;
 })();
 if (remembered) await shot('friend-remembers');
+else log('no recall: approach state', await page.evaluate(() => {
+  const g = window.__esl, w = g.world, a = g.npcs.actorFor(w.save.introNpc);
+  return { mode: g.mode, fd: w.save.flags.fd, approached: !!w.daily.approached[w.save.introNpc], queue: g.npcs.approachQueue.map((q) => ({ id: q.actor.npc.id, delay: q.delay, started: !!q.started, scripted: q.scripted })), actor: a ? { engaged: !!a.engaged, walk: !!a.walk, plan: !!a.plan, mode: a.mode, special: a.special || null } : null, panel: document.querySelector('.dlg-en')?.textContent || null, card: !!g.hud.showingCard };
+}));
 expect(!!remembered, `the friend remembers yesterday: ${remembered}`);
 await pump(async () => (await state()).mode === 'explore', { label: 'morning', max: 40 });
 s = await state();

@@ -17,6 +17,9 @@ import { FRIEND_HOUSE_DOOR } from '../world/friendhouse.js';
 import { planOuting, busyReason } from '../dialogue/outing.js';
 import { eventTitle } from '../dialogue/events.js';
 import { whenPhrase } from '../dialogue/common.js';
+import { ownedThings, isWorn } from '../world/things.js';
+import { thingActions, useThing } from '../activities/things.js';
+import { pocketMoney } from '../world/mall.js';
 
 /**
  * The gentle "what next?" line on a friend's journal page. Shows plans and
@@ -69,7 +72,7 @@ function memoryCaption(m) {
 const TITLES = {
   phone: ['📱 Messages', 'メッセージ'], journal: ['📖 Friendship Journal', '友達ノート'], calendar: ['📅 Calendar', 'カレンダー'],
   map: ['🗺️ Map', '地図'], settings: ['⚙️ Settings', '設定'], board: ["🗾 Let's go!", '行ってみよう！'], timetable: ['🗓️ Timetable', '時間わり'],
-  shelf: ['🧸 Memories', '思い出'],
+  shelf: ['🧸 Memories', '思い出'], things: ['🎒 My Things', 'マイ・グッズ'],
 };
 
 export class Menus {
@@ -123,7 +126,7 @@ export class Menus {
     this.body = body;
     const fn = {
       phone: () => this.phone(), journal: () => this.journal(opts.tab || 'friends', opts.npc), calendar: () => this.calendar(opts.month), map: () => this.map(),
-      settings: () => this.settings(), board: () => this.board(), timetable: () => this.timetable(), shelf: () => this.memories(),
+      settings: () => this.settings(), board: () => this.board(), timetable: () => this.timetable(), shelf: () => this.memories(), things: () => this.things(),
     }[this.current];
     fn?.();
   }
@@ -135,7 +138,9 @@ export class Menus {
     // Plan an outing with friends (group outings, Phase 2).
     const mk = el('button', { class: 'plan-btn' }, ['📅 Make a plan with friends', this.j ? el('small', {}, ['友達と約束をする']) : null]);
     mk.addEventListener('click', async () => { this.close(); await planOuting(this.game); this.game.hud.refresh(); });
-    this.body.appendChild(el('div', { class: 'plan-row' }, [mk]));
+    const mine = el('button', { class: 'mt-btn' }, ['🎒 My Things', this.j ? el('small', {}, ['マイ・グッズ']) : null]);
+    mine.addEventListener('click', () => { sfx.select?.(); this.current = 'things'; this.render(); });
+    this.body.appendChild(el('div', { class: 'plan-row' }, [mk, mine]));
     if (!msgs.length) {
       this.body.appendChild(el('div', { class: 'empty' }, ['No messages yet. Make friends, and they will write to you!', this.j ? el('small', {}, ['まだメッセージはないよ。友達ができるとメッセージが来るよ！']) : null]));
       return;
@@ -414,6 +419,41 @@ export class Menus {
     }
     pane.appendChild(el('p', { class: 'note' }, ['👂 heard   💬 said   🎤 spoke with the mic', this.j ? el('small', {}, ['聞いた・言った・マイクで話した']) : null]));
     pane.appendChild(grid);
+  }
+
+  // ------------------------------------------------------------ My Things (DESIGN_DECISIONS 2026-11-23)
+  things() {
+    const g = this.game, w = g.world;
+    const list = ownedThings(w.save);
+    const top = el('div', { class: 'plan-row' });
+    const mem = el('button', { class: 'mt-btn' }, ['📸 Memories & souvenirs', this.j ? el('small', {}, ['思い出と思い出の品']) : null]);
+    mem.addEventListener('click', () => { this.current = 'shelf'; this.render(); });
+    top.append(mem, el('div', { class: 'wallet' }, [`👛 ${pocketMoney(w.save)} yen`, this.j ? el('small', {}, [`おこづかい ${pocketMoney(w.save)}円`]) : null]));
+    this.body.appendChild(top);
+    if (!list.length) {
+      this.body.appendChild(el('div', { class: 'empty' }, ["You don't have any things yet. Visit Niji Mall! You get 1,000 yen every week.", this.j ? el('small', {}, ['まだ何も持っていないよ。にじモールに行ってみよう！毎週1,000円もらえるよ。']) : null]));
+      return;
+    }
+    const grid = el('div', { class: 'things' });
+    for (const t of list) {
+      const name = t.item.en.replace(/^an? /, '');
+      const card = el('div', { class: `thing${isWorn(w.save, t.id) ? ' worn' : ''}`, 'data-thing': t.id }, [
+        el('div', { class: 'thing-emoji' }, [t.item.emoji]),
+        el('b', {}, [name.charAt(0).toUpperCase() + name.slice(1)]),
+        this.j ? el('small', {}, [t.item.ja]) : null,
+        isWorn(w.save, t.id) ? el('span', { class: 'thing-badge' }, ['Wearing ✓']) : null,
+      ]);
+      const row = el('div', { class: 'thing-acts' });
+      for (const a of thingActions(g, t.id)) {
+        const b = el('button', { class: `reply${a.ok ? ' go' : ''}`, 'data-act': a.id, disabled: !a.ok }, [a.en, this.j ? el('small', {}, [a.ja]) : null]);
+        if (a.ok) b.addEventListener('click', () => { this.close(); useThing(g, t.id, a.id).then(() => g.hud.refresh()); });
+        row.appendChild(b);
+        if (!a.ok && a.why) row.appendChild(el('div', { class: 'thing-why' }, [a.why.en, this.j ? el('small', {}, [a.why.ja]) : null]));
+      }
+      card.appendChild(row);
+      grid.appendChild(card);
+    }
+    this.body.appendChild(grid);
   }
 
   memories(pane = this.body) {

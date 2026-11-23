@@ -85,17 +85,17 @@ export class Activities {
    * rewards go through completeEvent: one memory, the event's XP once, its
    * cooldown and history; otherwise the ordinary activity rewards apply.
    */
-  async run(act, actors, { plan = null, like = null, event = null, variant = null, play = null } = {}) {
+  async run(act, actors, { plan = null, like = null, event = null, variant = null, play = null, item = null } = {}) {
     const game = this.game;
     const w = game.world;
     if (event?.template === 'friend_house' && event.status !== 'scheduled') return { status: CANCELLED };
     if (this.running) return { status: CANCELLED };
     this.running = true;
-    try { return await this._run(act, actors, { plan, like, event, variant, play }); }
+    try { return await this._run(act, actors, { plan, like, event, variant, play, item }); }
     finally { this.running = false; game.saveHold = false; }
   }
 
-  async _run(act, actors, { plan, like, event, variant, play }) {
+  async _run(act, actors, { plan, like, event, variant, play, item }) {
     const game = this.game;
     const w = game.world;
     game.setMode('activity');
@@ -114,6 +114,9 @@ export class Activities {
     }
     const result = activityOutcome(raw, error);
     actors = result.actors || actors;
+    // Memory facts (DESIGN_DECISIONS 2026-11-23): what was used and where.
+    if (item && !result.detail.item) result.detail.item = item;
+    if (!result.detail.place) result.detail.place = game.locationId;
     game.dialogue.close();
     game.activityHud.hide();
     game.activityTick = null;

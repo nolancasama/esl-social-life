@@ -1,5 +1,37 @@
 # Current State
 
+## Living World & Meaningful Possessions (2026-11-23, branch `living-world`, not deployed)
+Design review, frozen decisions and phase notes: DESIGN_DECISIONS.md →
+2026-11-23. Phase 1 (reliability) is `c294902`; Phases 2–5 are committed
+on the same branch after it. Built by Claude directly (no worker run).
+Not merged to `main` and not deployed.
+- **Reliability:** activity results are `completed / failed / cancelled`;
+  only completed ones reward. Failures recover to explore (bilingual toast,
+  no time cost, plan kept). Rewards and time are saved together. Duplicate
+  unique purchases are refused for free. Dev-only fault points
+  (`window.__esl.fault`).
+- **My Things** (phone, bedroom shelf): ball (park kick-ups; soccer fans
+  notice it and play), board game (Picture Pairs with a friend's real turns),
+  robot (Go straight / Turn left / Turn right / Stop on a grid), book and
+  comic (four-page read-aloud stories), coloured pencils (drawing hangs above
+  the bed), cap and T-shirt (mirror; persists, restores the original look),
+  kendama. State in `save.things` (idempotent, no save-version bump).
+- **Shared play:** racing against a live simulated rival car, rhythm duets,
+  home visits ask "What do you want to play?" and the choice decides the
+  activity. Memories record item, place, game and result, and recall them.
+- **NPC walks** stop after 0.8 s without progress (was: walk in place for
+  10 s).
+- Test hooks: `window.__esl.thingPlay` (frozen), `.reliability`, `.fault`.
+- **Verification (2026-11-23, Claude, headless Chrome + SwiftShader
+  1366×768):** `npm test` 124/124, build, playthrough 4/4, scenarios,
+  speech, friendship-all, friendhouse, school, mall, arcade, recovery, music,
+  perf (home 14/60, town 46/70, mall floors 16–27/90) all PASS. `e2e:living`
+  passed, and with `LIVING_HARNESS_BROKEN_ASSERTION=1` it failed on exactly
+  that assertion (exit 1). Its earlier failures were harness races and
+  setup ambiguity, fixed in the script (DESIGN_DECISIONS Phase 5 notes).
+  Screenshots inspected by Claude: `%TEMP%\esl-living-review\`,
+  `%TEMP%\esl-living-probe\` (kick-ups camera, robot board).
+
 ## Niji Mall three floors (2026-11-22, live)
 Design review and all phase notes: DESIGN_DECISIONS.md → 2026-11-22. Phase 1
 `ae0bc7b` and Phase 2 `edfbd94` were built by Codex and reviewed by Claude;
@@ -177,6 +209,9 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - School rooms (perf: 118-119 of 150 draw calls each): classmates stand in loose spots around the room during the lesson; in the gym the teacher stands behind the catch partner. Fine for now; polish if playtests show it matters.
 
 ## Next Steps
+00. Living World: with the user's go-ahead, fast-forward `living-world` into
+   `main` and deploy to GitHub Pages; then on a Chromebook check the robot
+   and Picture Pairs touch input, kick-up timing and the book overlay.
 0. Niji Mall three floors is live. On a Chromebook check the arcade touch
    buttons (hold to steer), crane difficulty (3 tries, grip radius 0.065) and
    race length (~21 s).
@@ -191,6 +226,8 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
    checking out `main` here.
 
 ## Codex / Delegated Work
+Living World (all five phases): Claude's own work, no worker output pending.
+
 Niji Mall floors: Phase 1–2 Codex output reviewed and committed (Phase 2's run
 ended on a Codex usage limit; Claude reviewed the partial diff, ran acceptance
 and capped meal receipts). Phases 3–4 are Claude's own work. No pending worker

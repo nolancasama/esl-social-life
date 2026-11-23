@@ -27,7 +27,8 @@
     "e2e:music": "node scripts/run-e2e.mjs music",
     "e2e:friendship-all": "node scripts/run-e2e.mjs friendship hobby groups visits journey",
     "e2e:arcade": "node scripts/run-e2e.mjs arcade",
-    "e2e:recovery": "node scripts/run-e2e.mjs recovery"
+    "e2e:recovery": "node scripts/run-e2e.mjs recovery",
+    "e2e:living": "node scripts/run-e2e.mjs living"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.3.0",

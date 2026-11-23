@@ -242,6 +242,10 @@ function propMesh(kind) {
   else if (kind === 'umbrella') {
     b.cyl(0.012, 0.012, 0.9, '#5A5A5A', 0, -0.1, 0);
     b.cone(0.55, 0.28, '#4DABF7', 0, 0.75, 0, { seg: 10 });
+  } else if (kind === 'kendama') {
+    b.cyl(0.018, 0.018, 0.22, '#C8874A', 0, -0.2, 0.05, { seg: 6 });
+    b.box(0.16, 0.04, 0.04, '#A0662F', 0, -0.02, 0.05);
+    b.sphere(0.045, '#E5534B', 0.0, 0.1, 0.05);
   } else if (kind === 'icecream') { b.cone(0.05, 0.14, '#E0A458', 0, -0.14, 0.04, { rx: Math.PI }); b.sphere(0.06, '#FFC9DE', 0, 0.02, 0.04); }
   return new THREE.Mesh(b.buildGeometry(), vertexMaterial());
 }

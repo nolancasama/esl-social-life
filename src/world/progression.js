@@ -30,6 +30,17 @@ export function areaCounts(save) {
   return out;
 }
 
+/**
+ * 1 for an expression the student has never said, falling to 0 after six
+ * times. Topic choice adds it so new questions come up first, while old ones
+ * stay available (no gates, no grades; DESIGN_DECISIONS 2026-11-23).
+ */
+export function exprFreshness(save, id) {
+  if (!id) return 0;
+  const said = langState(save).expr[id]?.said || 0;
+  return Math.max(0, 1 - said / 6);
+}
+
 /** 1 for well-practiced areas, up to ~3 for rarely practiced ones. */
 export function areaNeed(save, area) {
   const counts = areaCounts(save);

@@ -96,3 +96,28 @@ test('rhythm: grades and friend scores are deterministic', () => {
   assert.equal(s, rhythmFriendScore('n3'));
   assert.ok(s >= 3 && s <= 7);
 });
+
+test('racing: the simulated rival is seeded, visible on the same track and always beatable', async () => {
+  const { newRival, stepRival, finishRival } = await import('./arcade.js');
+  const { npcSkill } = await import('./things.js');
+  const clean = drive({ steer: true, brakeAt: RACE_STOP_ZONE.from + 1 });
+  const lazy = drive({ steer: false });
+  const times = [];
+  for (const npc of [{ id: 'n1', likes: ['games', 'music'] }, { id: 'n2', likes: ['cooking'] }, { id: 'n3', likes: ['cycling'] }, null]) {
+    for (const seed of ['a', 'b', 'c']) {
+      const skill = npcSkill(npc, 'racing');
+      const a = finishRival(newRival(skill, `${npc?.id}|${seed}`));
+      const b = finishRival(newRival(skill, `${npc?.id}|${seed}`));
+      assert.equal(a.s.finishTime, b.s.finishTime, 'deterministic from the seed');
+      assert.ok(a.s.stopped, 'the rival stops at the end');
+      assert.ok(a.s.finishTime > clean.finishTime + 0.3, `a clean player beats the rival (${clean.finishTime.toFixed(2)} vs ${a.s.finishTime.toFixed(2)})`);
+      assert.ok(a.s.finishTime < lazy.finishTime, 'a player who never steers loses');
+      times.push(a.s.finishTime);
+    }
+  }
+  assert.ok(Math.max(...times) - Math.min(...times) > 0.3, 'different rivals finish at different times');
+  // Progress is visible and mistakes happen as events.
+  let rv = newRival(0.5, 'events'), events = new Set(), lastD = 0;
+  for (let i = 0; i < 60 * 60 && !rv.s.stopped; i++) { const r = stepRival(rv, 1 / 60); rv = r.rv; if (r.event) events.add(r.event); assert.ok(rv.s.d >= lastD); lastD = rv.s.d; }
+  assert.ok(events.has('mistake') && events.has('finish') && events.has('stop'));
+});

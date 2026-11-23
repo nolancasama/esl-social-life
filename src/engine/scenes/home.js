@@ -127,6 +127,35 @@ export function buildHome() {
     });
   };
 
+  // Things you bought: the toy robot stands on the floor, your newest drawing
+  // hangs above the bed (DESIGN_DECISIONS 2026-11-23).
+  const robot = new THREE.Group();
+  robot.position.set(-1.35, 0, 2.55);
+  robot.visible = false;
+  root.add(robot);
+  let robotMesh = null;
+  const drawingFrame = new THREE.Mesh(new THREE.PlaneGeometry(0.86, 0.66), new THREE.MeshBasicMaterial({ color: '#FFFFFF', toneMapped: false }));
+  drawingFrame.position.set(-3.4, 1.95, -3.725);
+  drawingFrame.visible = false;
+  root.add(drawingFrame);
+  const drawingPic = new THREE.Mesh(new THREE.PlaneGeometry(0.76, 0.56), new THREE.MeshBasicMaterial({ color: '#FFFFFF', toneMapped: false }));
+  drawingPic.position.set(-3.4, 1.95, -3.72);
+  drawingPic.visible = false;
+  root.add(drawingPic);
+  const robotSpot = { id: 'robot', x: -1.35, z: 2.0, r: 0.95, kind: 'thing', thing: 'robot', icon: '🤖', label: { en: 'Play with the robot', ja: 'ロボットであそぶ' } };
+  /** { robot: bool, robotMesh: () => Mesh, drawing: CanvasTexture | null } */
+  const setThings = ({ robot: hasRobot = false, makeRobot = null, drawing = null } = {}) => {
+    robot.visible = hasRobot;
+    if (hasRobot && !robotMesh && makeRobot) { robotMesh = makeRobot(); robotMesh.scale.setScalar(2.6); robot.add(robotMesh); }
+    const i = interact.indexOf(robotSpot);
+    if (hasRobot && i < 0) interact.push(robotSpot);
+    if (!hasRobot && i >= 0) interact.splice(i, 1);
+    drawingPic.material.map?.dispose?.();
+    drawingPic.material.map = drawing;
+    drawingPic.material.needsUpdate = true;
+    drawingFrame.visible = drawingPic.visible = !!drawing;
+  };
+
   const lights = roomLights(root);
   const collision = new CollisionWorld({ bounds: { minX: R.minX, maxX: R.maxX + 0.8, minZ: R.minZ, maxZ: R.maxZ } });
   collision.boxes.push(...b.boxes);
@@ -137,7 +166,7 @@ export function buildHome() {
     { id: 'journal', x: 2.0, z: -2.4, r: 0.95, kind: 'journal', icon: '📖', label: { en: 'Friendship journal', ja: '友達ノート' } },
     { id: 'tablet', x: 3.2, z: -2.4, r: 0.95, kind: 'messages', icon: '📱', label: { en: 'Messages', ja: 'メッセージ' } },
     { id: 'calendar', x: -3.75, z: -0.4, r: 0.95, kind: 'calendar', icon: '📅', label: { en: 'Calendar', ja: 'カレンダー' } },
-    { id: 'shelf', x: -3.7, z: 1.6, r: 1.1, kind: 'shelf', icon: '🧸', label: { en: 'Memories', ja: '思い出' } },
+    { id: 'shelf', x: -3.7, z: 1.6, r: 1.1, kind: 'shelf', icon: '🧸', label: { en: 'My Things & Memories', ja: 'マイ・グッズと思い出' } },
     { id: 'mirror', x: 3.85, z: 0.55, r: 0.95, kind: 'mirror', icon: '🪞', label: { en: 'Mirror', ja: 'かがみ' } },
     { id: 'homeExit', x: 4.1, z: 2.3, r: 1.0, kind: 'door', to: 'town', icon: '🚪', label: { en: 'Go outside', ja: '外に出る' } },
   ];
@@ -163,9 +192,9 @@ export function buildHome() {
 
   return {
     id: 'home', name: { en: 'My Room', ja: '自分の部屋' },
-    root, collision, spots: [], groups: [], interact, spawns, lights, tv,
+    root, collision, spots: [], groups: [], interact, spawns, lights, tv, robot,
     camera: { mode: 'room', yaw: 0, pitch: 0.86, dist: 8.8, center: { x: 0, z: 0.2 }, follow: 0.45, bounds: { minX: -4.0, maxX: 4.0, minZ: -3.2, maxZ: 7.5 } },
-    setCalendar, setPhotos, setSouvenirs,
+    setCalendar, setPhotos, setSouvenirs, setThings,
     ambience,
     update: () => {},
   };
