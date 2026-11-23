@@ -1,10 +1,17 @@
 # Current State
 
-## Living World & Meaningful Possessions (2026-11-23, branch `living-world`, not deployed)
+## Living World & Meaningful Possessions (2026-11-23, live since 2026-11-24)
 Design review, frozen decisions and phase notes: DESIGN_DECISIONS.md →
-2026-11-23. Phase 1 (reliability) is `c294902`; Phases 2–5 are committed
-on the same branch after it. Built by Claude directly (no worker run).
-Not merged to `main` and not deployed.
+2026-11-23. Phase 1 (reliability) is `c294902`; Phases 2–5 are `d70341f`.
+Built by Claude directly (no worker run). Fast-forwarded to `main`
+(`42e266f`) and deployed to GitHub Pages on 2026-11-24 (gh-pages `b94f84d`).
+`living-world` is pushed as well.
+- **Pre-deploy rerun (2026-11-24, Claude):** `npm test` 124/124, build,
+  playthrough, scenarios, speech and `e2e:living` PASS. The first
+  `e2e:living` attempt failed in the robot section. The harness read the
+  pose and the path in two separate calls, so a level change between them
+  gave a goal off the board. `42e266f` plans from one snapshot and fails
+  fast on an off-board goal. Test-only fix; game code unchanged.
 - **Reliability:** activity results are `completed / failed / cancelled`;
   only completed ones reward. Failures recover to explore (bilingual toast,
   no time cost, plan kept). Rewards and time are saved together. Duplicate
@@ -209,9 +216,8 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 - School rooms (perf: 118-119 of 150 draw calls each): classmates stand in loose spots around the room during the lesson; in the gym the teacher stands behind the catch partner. Fine for now; polish if playtests show it matters.
 
 ## Next Steps
-00. Living World: with the user's go-ahead, fast-forward `living-world` into
-   `main` and deploy to GitHub Pages; then on a Chromebook check the robot
-   and Picture Pairs touch input, kick-up timing and the book overlay.
+00. Living World is live. On a Chromebook check the robot and Picture Pairs
+   touch input, kick-up timing and the book overlay.
 0. Niji Mall three floors is live. On a Chromebook check the arcade touch
    buttons (hold to steer), crane difficulty (3 tries, grip radius 0.065) and
    race length (~21 s).
@@ -220,10 +226,6 @@ Committed as `c561e0a`, merged to `main` and deployed to GitHub Pages (2026-11-1
 3. Collect classroom transcripts for new phrases (`VARIANTS` in `src/dialogue/intent.js`): "How about ___?", "Can I join?", "This is from ___."
 4. School-life expansion is live. Listen to the music on a classroom Chromebook
    (balance, speech ducking) and fix anything found on `main`.
-5. A stale worktree from an older session still holds local `main` at
-   `428f2e3` (`%TEMP%/claude/.../97b2a4c3-.../scratchpad/esl-main`, with two
-   untracked scripts). `origin/main` is current; remove that worktree before
-   checking out `main` here.
 
 ## Codex / Delegated Work
 Living World (all five phases): Claude's own work, no worker output pending.
@@ -237,4 +239,4 @@ Part 4 (music) was built by Codex and reviewed by Claude: diff read, scene ids c
 
 Part 3 was built by Codex (stopped on a usage limit before validation) and finished by Claude at the user's request: casual-question priority fix, two e2e fixture fixes, harness proof (known-good pass; a deliberately broken intro line failed with exit 1, reverted), full suite rerun. No pending worker output.
 
-Niji Mall was built by Codex and reviewed by Claude (diff, screenshots, full suite rerun by Claude), then committed as `d078832`. The hangout-report priority rule was a direct Claude edit. Codex implemented the friend's-home part (run timed out during final validation); Claude reviewed the diff, made the cat model read as a cat (pointed ears, whiskers, upright tail instead of a curled shiba tail), reran the full suite (unit + 9 e2e suites, all PASS, perf friendhouse 13/90 draw calls) and committed it. No pending worker output.
+Niji Mall (first version) was built by Codex and reviewed by Claude (diff, screenshots, full suite rerun by Claude), then committed as `d078832`. The hangout-report priority rule was a direct Claude edit. Codex implemented the friend's-home part (run timed out during final validation); Claude reviewed the diff, made the cat model read as a cat (pointed ears, whiskers, upright tail instead of a curled shiba tail), reran the full suite (unit + 9 e2e suites, all PASS, perf friendhouse 13/90 draw calls) and committed it. No pending worker output.
