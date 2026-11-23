@@ -315,20 +315,25 @@ try {
       continue;
     }
     if (!cards.some((c) => c.includes('Go straight!'))) { await sleep(120); continue; }
-    const first = await ev(async () => {
+    // Plan from one snapshot: reading the pose and the path in separate calls
+    // let a level change slip between them, giving a goal off the board.
+    const plan = await ev(async () => {
       const { robotPath, ROBOT_LEVELS } = await import('/src/activities/things.js');
       const s = window.__esl.thingPlay;
-      return robotPath({ ...ROBOT_LEVELS[s.level], star: s.star }, s.pose, s.star)?.[0] || null;
+      if (s.moving) return null;
+      return { first: robotPath({ ...ROBOT_LEVELS[s.level], star: s.star }, s.pose, s.star)?.[0] || null, pose: { ...s.pose } };
     });
+    const first = plan?.first;
     if (!first) { await sleep(120); continue; }
     if (first.id === 'straight') {
-      const D = [[0, -1], [1, 0], [0, 1], [-1, 0]][t.pose.d];
-      robotGoal = { x: t.pose.x + D[0] * first.n, y: t.pose.y + D[1] * first.n };
+      const D = [[0, -1], [1, 0], [0, 1], [-1, 0]][plan.pose.d];
+      robotGoal = { x: plan.pose.x + D[0] * first.n, y: plan.pose.y + D[1] * first.n };
+      if (robotGoal.x < 0 || robotGoal.y < 0 || robotGoal.x > 4 || robotGoal.y > 4) throw new Error(`HARNESS_PRECONDITION_FAILED: robot goal off the board ${JSON.stringify({ plan, robotGoal })}`);
       await clickCard('Go straight!');
       await precondition('robot starts walking', () => window.__esl.thingPlay.moving, null, 10000);
     } else {
       await clickCard(first.id === 'left' ? 'Turn left!' : 'Turn right!');
-      await precondition('robot turns', (d) => window.__esl.thingPlay.pose.d !== d, t.pose.d, 10000);
+      await precondition('robot turns', (d) => window.__esl.thingPlay.pose.d !== d, plan.pose.d, 10000);
     }
     await sleep(150);
   }
